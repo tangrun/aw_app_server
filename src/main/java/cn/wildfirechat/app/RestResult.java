@@ -1,5 +1,8 @@
 package cn.wildfirechat.app;
 
+import cn.wildfirechat.common.ErrorCode;
+import cn.wildfirechat.sdk.model.IMResult;
+
 public class RestResult {
     public enum  RestCode {
         SUCCESS(0, "success"),
@@ -19,7 +22,10 @@ public class RestResult {
         ERROR_INVALID_PARAMETER(15, "无效参数"),
         ERROR_NOT_EXIST(16, "对象不存在"),
         ERROR_USER_NAME_ALREADY_EXIST(17, "用户名已经存在"),
-        ERROR_SESSION_CANCELED(18, "会话已经取消");
+        ERROR_SESSION_CANCELED(18, "会话已经取消"),
+        ERROR_FILE_DOWNLOAD_ERROR(19, "文件下载失败"),
+        ERROR_USER_NOT_EXIST(20, "用户不存在"),
+        ERROR_USER_PASSWORD_ERROR(21, "密码错误");
         public int code;
         public String msg;
 
@@ -50,6 +56,15 @@ public class RestResult {
         r.code = code;
         r.message = message;
         return r;
+    }
+
+    public static RestResult result(IMResult<?> imResult) {
+        return result(imResult, null);
+    }
+
+    public static RestResult result(IMResult<?> imResult, String msg) {
+        ErrorCode errorCode = imResult.getErrorCode();
+        return result(errorCode.code, msg == null ? errorCode.msg : null, null);
     }
 
     private RestResult(RestCode code, Object result) {

@@ -12,6 +12,9 @@ public interface Service {
     RestResult sendCode(String mobile);
     RestResult login(HttpServletResponse response, String mobile, String code, String clientId, int platform);
 
+    RestResult loginByPwd(HttpServletResponse response, String mobile, String code, String clientId, int i);
+    RestResult setPassword(HttpServletResponse response, ChangePasswordRequest request);
+    RestResult changePassword(HttpServletResponse response, ChangePasswordRequest request);
 
     RestResult createPcSession(CreateSessionRequest request);
     RestResult loginWithSession(String token);
@@ -39,4 +42,6 @@ public interface Service {
     RestResult removeFavoriteItems(long id);
     RestResult getFavoriteItems(long id, int count);
     RestResult getGroupMembersForPortrait(String groupId);
+
+
 }

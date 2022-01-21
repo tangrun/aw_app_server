@@ -1,11 +1,7 @@
 package cn.wildfirechat.app;
 
 
-import cn.wildfirechat.app.jpa.Announcement;
-import cn.wildfirechat.app.jpa.AnnouncementRepository;
-import cn.wildfirechat.app.jpa.FavoriteItem;
-import cn.wildfirechat.app.jpa.FavoriteRepository;
-import cn.wildfirechat.app.jpa.PCSession;
+import cn.wildfirechat.app.jpa.*;
 import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.shiro.AuthDataSource;
 import cn.wildfirechat.app.shiro.TokenAuthenticationToken;
@@ -41,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.Base64Utils;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -61,6 +58,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static cn.wildfirechat.app.RestResult.RestCode.*;
+import static cn.wildfirechat.app.RestResult.RestCode.ERROR_USER_NOT_EXIST;
 import static cn.wildfirechat.app.jpa.PCSession.PCSessionStatus.*;
 
 @org.springframework.stereotype.Service
@@ -78,6 +76,9 @@ public class ServiceImpl implements Service {
 
     @Autowired
     private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private UserPwdRepository userPwdRepository;
 
     @Value("${sms.super_code}")
     private String superCode;
@@ -336,6 +337,153 @@ public class ServiceImpl implements Service {
             return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
         }
     }
+
+    /**
+     * 手机号、密码登录
+     * @param httpResponse
+     * @param mobile
+     * @param code
+     * @param clientId
+     * @param platform
+     * @return
+     */
+    @Override
+    public RestResult loginByPwd(HttpServletResponse httpResponse, String mobile, String code, String clientId, int platform) {
+        Subject subject = SecurityUtils.getSubject();
+        // 在认证提交前准备 token（令牌）
+        UsernamePasswordToken token = new UsernamePasswordToken(mobile, superCode);
+        // 执行认证登陆
+        try {
+            subject.login(token);
+        } catch (UnknownAccountException uae) {
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        } catch (IncorrectCredentialsException ice) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (LockedAccountException lae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (ExcessiveAttemptsException eae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (AuthenticationException ae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        }
+        if (subject.isAuthenticated()) {
+            long timeout = subject.getSession().getTimeout();
+            LOG.info("Login success " + timeout);
+        } else {
+            token.clear();
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        }
+
+        try {
+            //使用电话号码查询用户信息。
+            IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
+
+            //如果用户信息不存在，创建用户
+            InputOutputUserInfo user;
+            boolean isNewUser = false;
+            if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_NOT_EXIST) {
+                LOG.info("User not exist, try to create");
+                return RestResult.error(ERROR_USER_NOT_EXIST);
+            } else if (userResult.getCode() != 0) {
+                LOG.error("Get user failure {}", userResult.code);
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            } else {
+                user = userResult.getResult();
+            }
+
+            //判断用户是否已经设置密码
+            UserPwdEntry userPwdEntry = userPwdRepository.getUserPwdByUserId(user.getUserId());
+            if(userPwdEntry == null){
+                // 没有设置密码时
+                return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
+            }else if(!userPwdEntry.passwd.equals(DigestUtils.md5DigestAsHex(code.getBytes()))){
+                // 密码不正确时
+                return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
+            }
+
+            //使用用户id获取token
+            IMResult<OutputGetIMTokenData> tokenResult = UserAdmin.getUserToken(user.getUserId(), clientId, platform);
+            if (tokenResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
+                LOG.error("Get user failure {}", tokenResult.code);
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            }
+
+            subject.getSession().setAttribute("userId", user.getUserId());
+
+            //返回用户id，token和是否新建
+            LoginResponse response = new LoginResponse();
+            response.setUserId(user.getUserId());
+            response.setToken(tokenResult.getResult().getToken());
+            response.setRegister(isNewUser);
+
+            if (!org.apache.commons.lang3.StringUtils.isEmpty(mIMConfig.welcome_for_back_user)) {
+                sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_back_user);
+            }
+
+            Object sessionId = subject.getSession().getId();
+            httpResponse.setHeader("authToken", sessionId.toString());
+            return RestResult.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.error("Exception happens {}", e);
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * 设置密码
+     * @param httpResponse
+     * @param request
+     * @return
+     */
+    @Override
+    public RestResult setPassword(HttpServletResponse httpResponse, ChangePasswordRequest request){
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        //判断用户是否已经设置密码
+        UserPwdEntry userPwdEntry = userPwdRepository.getUserPwdByUserId(userId);
+        if(userPwdEntry == null){
+            // 没有设置密码时
+            userPwdEntry = new UserPwdEntry();
+        }
+        userPwdEntry.setUser_id(userId);
+        userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
+        userPwdRepository.save(userPwdEntry);
+        return RestResult.ok(null);
+    }
+
+    /**
+     * 修改密码
+     * @param httpResponse
+     * @param request
+     * @return
+     */
+    @Override
+    public RestResult changePassword(HttpServletResponse httpResponse, ChangePasswordRequest request){
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        //判断用户是否已经设置密码
+        UserPwdEntry userPwdEntry = userPwdRepository.getUserPwdByUserId(userId);
+        if(userPwdEntry == null){
+            // 没有设置密码时
+            userPwdEntry = new UserPwdEntry();
+            userPwdEntry.setUser_id(userId);
+            userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
+            userPwdRepository.save(userPwdEntry);
+            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
+        }else {
+            // 密码不正确时
+            if(!userPwdEntry.passwd.equals(DigestUtils.md5DigestAsHex(request.getOldPwd().getBytes()))) {
+                return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
+            }else {
+                userPwdEntry.setUser_id(userId);
+                userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
+                userPwdRepository.save(userPwdEntry);
+                return RestResult.ok(null);
+            }
+        }
+    }
+
 
     private boolean isUsernameAvailable(String username) {
         try {
