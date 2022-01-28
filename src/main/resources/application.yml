@@ -2,7 +2,8 @@
 spring:
   jpa:
     database-platform: org.hibernate.dialect.MySQL5InnoDBDialect
-
+  profiles:
+    active: dev
 logging:
   level:
     root: info

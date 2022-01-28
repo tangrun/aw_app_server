@@ -27,6 +27,9 @@ public class ShiroConfig {
     @Value("${wfc.all_client_support_ssl}")
     private boolean All_Client_Support_SSL;
 
+    @Value("${spring.profiles.active}")
+    private String profilesActive;
+
     @Bean(name = "shiroFilter")
     public ShiroFilterFactoryBean shiroFilter(SecurityManager securityManager) {
         ShiroFilterFactoryBean shiroFilterFactoryBean = new ShiroFilterFactoryBean();
@@ -56,6 +59,11 @@ public class ShiroConfig {
         filterChainDefinitionMap.put("/get_group_announcement", "login");
         filterChainDefinitionMap.put("/things/add_device", "login");
         filterChainDefinitionMap.put("/things/list_device", "login");
+        if ("dev".equals(profilesActive)) {
+            filterChainDefinitionMap.put("/api-docs/**", "anon");
+            filterChainDefinitionMap.put("/swagger-ui/**", "anon");
+        }
+        filterChainDefinitionMap.put("/common/file/**", "anon");
 
         //主要这行代码必须放在所有权限设置的最后，不然会导致所有 url 都被拦截 剩余的都需要认证
         filterChainDefinitionMap.put("/**", "login");
@@ -89,7 +97,6 @@ public class ShiroConfig {
         SecurityUtils.setSecurityManager(defaultSecurityManager);
         return defaultSecurityManager;
     }
-
 
 
     @Autowired

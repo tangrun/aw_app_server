@@ -3,6 +3,7 @@ package cn.wildfirechat.app.admin;
 import cn.wildfirechat.app.RestResult;
 import cn.wildfirechat.app.pojo.FriendExtraInfo;
 import cn.wildfirechat.app.tools.Invoker;
+import cn.wildfirechat.app.work.report.entity.WorkReportEntry;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.pojos.*;
 import cn.wildfirechat.proto.ProtoConstants;
@@ -18,6 +19,24 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class AdminService {
 
+
+    public RestResult sendWorkReportMessage(String fromUser, String targetId, WorkReportEntry entry){
+//        Conversation conversation = new Conversation();
+//        conversation.setTarget(targetId);
+//        conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
+//        MessagePayload payload = new MessagePayload();
+//        payload.setType(MessageContentType.Type_Tip_Notification);
+//        payload.setPersistFlag(ProtoConstants.PersistFlag.Persist);
+//        payload.setContent(content);
+//        try {
+//            IMResult<SendMessageResult> result = MessageAdmin.sendMessage(fromUser, conversation, payload);
+//            return RestResult.result(result);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+//        }
+        return null;
+    }
 
     /**
      * 设置用户扩展信息

@@ -5,3 +5,5 @@ nohup.out
 appdata.trace.db
 *.iml
 .svn
+audio_cache
+wildfire_upload_tmp

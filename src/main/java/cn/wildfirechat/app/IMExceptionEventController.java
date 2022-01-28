@@ -1,6 +1,7 @@
 package cn.wildfirechat.app;
 
 import cn.wildfirechat.common.IMExceptionEvent;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Supplier;
 
+@Hidden
 @RestController
 public class IMExceptionEventController {
     private BlockingDeque<IMExceptionEvent> events = new LinkedBlockingDeque<>();

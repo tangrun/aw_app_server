@@ -29,9 +29,9 @@ public class TokenMatcher implements CredentialsMatcher {
     }
 
     public static void main(String[] args) {
-        AdminHttpUtils.init("http://wildfirechat.cn:18080", "37923");
+        AdminHttpUtils.init("http://192.168.0.218:8801", "123456");
         try {
-            IMResult<InputOutputUserInfo> userByMobile = UserAdmin.getUserByMobile("13888888888");
+            IMResult<InputOutputUserInfo> userByMobile = UserAdmin.getUserByMobile("18282638510");
             System.out.println(userByMobile.msg);
 
         } catch (Exception e) {

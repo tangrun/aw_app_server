@@ -2,6 +2,7 @@ package cn.wildfirechat.app;
 
 import cn.wildfirechat.pojos.*;
 import com.google.gson.Gson;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 IM对应事件发生时，会回调到配置地址。需要注意IM服务单线程进行回调，如果接收方处理太慢会导致推送线程被阻塞，导致延迟发生，甚至导致IM系统异常。
 建议异步处理快速返回，这里收到后转到异步线程处理，并且立即返回。另外两个服务器的ping值不能太大。
  */
+@Hidden
 @RestController()
 public class IMCallbackController {
     /*
