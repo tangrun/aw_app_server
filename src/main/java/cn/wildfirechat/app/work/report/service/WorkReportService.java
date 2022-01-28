@@ -14,10 +14,7 @@ import cn.wildfirechat.app.work.report.repository.WorkReportRepository;
 import cn.wildfirechat.app.work.report.repository.WorkReportTempRepository;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.time.DateFormatUtils;
-import org.apache.commons.lang3.time.DateUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,10 +22,7 @@ import org.springframework.util.Assert;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Nullable;
-import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -49,15 +43,6 @@ public class WorkReportService {
     @Resource
     CommonService commonService;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    private JPAQueryFactory jpaQueryFactory;
-
-    @PostConstruct
-    private void init() {
-        jpaQueryFactory = new JPAQueryFactory(entityManager);
-    }
 
     @Transactional
     public RestResult deleteReport(Long reportId, String userId) {
