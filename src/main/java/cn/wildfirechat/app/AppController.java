@@ -1,13 +1,15 @@
 package cn.wildfirechat.app;
 
 import cn.wildfirechat.app.admin.AdminService;
+import cn.wildfirechat.app.common.CommonService;
+import cn.wildfirechat.app.common.entity.UploadFile;
 import cn.wildfirechat.app.jpa.FavoriteItem;
 import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.tools.Invoker;
 import cn.wildfirechat.app.tools.Utils;
 import cn.wildfirechat.common.ErrorCode;
-import cn.wildfirechat.pojos.*;
-import cn.wildfirechat.sdk.MessageAdmin;
+import cn.wildfirechat.pojos.InputCreateDevice;
+import cn.wildfirechat.pojos.InputOutputUserInfo;
 import cn.wildfirechat.sdk.UserAdmin;
 import cn.wildfirechat.sdk.model.IMResult;
 import org.apache.shiro.SecurityUtils;
@@ -16,9 +18,9 @@ import org.h2.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
@@ -26,7 +28,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -40,9 +41,25 @@ public class AppController {
     @Autowired
     private AdminService adminService;
 
+    @Autowired
+    private CommonService commonService;
+
+    @Value("${call.server.host}")
+    private String callServerHost;
+
+    @Value("${call.server.port}")
+    private Integer callServerPort;
+
     @GetMapping()
     public Object health() {
         return "Ok";
+    }
+
+    @PostMapping(value = "/call/serverInfo")
+    public RestResult<CallServerInfoResp> serverInfo() {
+        return RestResult.ok(new CallServerInfoResp()
+                .setServerHost(callServerHost)
+                .setServerPort(callServerPort));
     }
 
     //region 拓展字段相关设置接口
@@ -142,24 +159,64 @@ public class AppController {
         return mService.sendCode(request.getMobile());
     }
 
+    /**
+     * 验证码登录
+     *
+     * @param request
+     * @param response
+     * @return
+     */
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
     public Object login(@RequestBody LoginRequest request, HttpServletResponse response) {
         return mService.login(response, request.getMobile(), request.getCode(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
     }
 
+    /**
+     * 密码登录
+     *
+     * @param request
+     * @param response
+     * @return
+     */
     @PostMapping(value = "/api/login", produces = "application/json;charset=UTF-8")
     public Object loginByPwd(@RequestBody LoginRequest request, HttpServletResponse response) {
-        return mService.loginByPwd(response, request.getMobile(), request.getCode(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
+        request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
+        return mService.loginByPwd(response, request);
     }
 
+    /**
+     * 设置密码
+     *
+     * @param request
+     * @param response
+     * @return
+     */
     @PostMapping(value = "/api/setpwd", produces = "application/json;charset=UTF-8")
     public Object setPassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
         return mService.setPassword(response, request);
     }
 
+    /**
+     * 修改密码
+     * @param request
+     * @param response
+     * @return
+     */
     @PostMapping(value = "/api/changePwd", produces = "application/json;charset=UTF-8")
     public Object changePassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
-        return mService.setPassword(response, request);
+        return mService.changePassword(response, request);
+    }
+
+    /**
+     * 忘记密码
+     *
+     * @param request
+     * @param response
+     * @return
+     */
+    @PostMapping(value = "/api/forgetPassword", produces = "application/json;charset=UTF-8")
+    public Object setForgetPassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
+        return mService.forgetPassword(response, request);
     }
 
     /*
@@ -190,12 +247,12 @@ public class AppController {
                         deferredResult.setResult(new ResponseEntity(restResult, HttpStatus.OK));
                         break;
                     } else if (restResult.getCode() == RestResult.RestCode.SUCCESS.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
-                        ResponseEntity.BodyBuilder builder =ResponseEntity.ok();
-                        if(restResult.getCode() == RestResult.RestCode.SUCCESS.code){
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
+                        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+                        if (restResult.getCode() == RestResult.RestCode.SUCCESS.code) {
                             Subject subject = SecurityUtils.getSubject();
                             Object sessionId = subject.getSession().getId();
                             builder.header("authToken", sessionId.toString());
@@ -205,7 +262,7 @@ public class AppController {
                     } else {
                         TimeUnit.SECONDS.sleep(1);
                     }
-                    i ++;
+                    i++;
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -229,6 +286,7 @@ public class AppController {
     public Object confirmPc(@RequestBody ConfirmSessionRequest request) {
         return mService.confirmPc(request);
     }
+
     @PostMapping(value = "/cancel_pc", produces = "application/json;charset=UTF-8")
     public Object cancelPc(@RequestBody CancelSessionRequest request) {
         return mService.cancelPc(request);
@@ -339,7 +397,13 @@ public class AppController {
      */
     @PostMapping(value = "/media/upload/{media_type}")
     public Object uploadMedia(@RequestParam("file") MultipartFile file, @PathVariable("media_type") int mediaType) throws IOException {
-        return mService.uploadMedia(mediaType, file);
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+
+        UploadFile uploadFile = commonService.uploadFile(userId, file);
+        UploadFileResponse response = new UploadFileResponse();
+        response.url = commonService.getDownloadPath(uploadFile);
+        return RestResult.ok(response);
     }
 
     @CrossOrigin

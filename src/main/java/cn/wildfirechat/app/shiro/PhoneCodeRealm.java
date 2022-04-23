@@ -2,7 +2,10 @@ package cn.wildfirechat.app.shiro;
 
 
 import cn.wildfirechat.app.RestResult;
-import org.apache.shiro.authc.*;
+import org.apache.shiro.authc.AuthenticationException;
+import org.apache.shiro.authc.AuthenticationInfo;
+import org.apache.shiro.authc.AuthenticationToken;
+import org.apache.shiro.authc.SimpleAuthenticationInfo;
 import org.apache.shiro.authz.AuthorizationInfo;
 import org.apache.shiro.authz.SimpleAuthorizationInfo;
 import org.apache.shiro.realm.AuthorizingRealm;
@@ -27,14 +30,20 @@ public class PhoneCodeRealm extends AuthorizingRealm {
     }
 
     @Override
-    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
-        String mobile = (String) authenticationToken.getPrincipal();
-        String code = new String((char[]) authenticationToken.getCredentials());
-        RestResult.RestCode restCode = authDataSource.verifyCode(mobile, code);
-        if (restCode == RestResult.RestCode.SUCCESS) {
-            return new SimpleAuthenticationInfo(mobile, code.getBytes(), getName());
-        }
+    public boolean supports(AuthenticationToken token) {
+        return token instanceof UsernameCodeToken;
+    }
 
+    @Override
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
+        if (token instanceof UsernameCodeToken){
+            String mobile = ((UsernameCodeToken) token).getUsername();
+            String code = new String(((UsernameCodeToken) token).getPassword());
+            RestResult.RestCode restCode = authDataSource.verifyCode(mobile, code);
+            if (restCode == RestResult.RestCode.SUCCESS) {
+                return new SimpleAuthenticationInfo(mobile, code.getBytes(), getName());
+            }
+        }
         throw new AuthenticationException("没发送验证码或者验证码过期");
     }
 }

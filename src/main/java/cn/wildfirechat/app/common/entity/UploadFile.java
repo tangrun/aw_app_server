@@ -2,12 +2,10 @@ package cn.wildfirechat.app.common.entity;
 
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
-import org.springframework.data.annotation.CreatedDate;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
-import java.sql.Timestamp;
 import java.util.Date;
 
 @Data
@@ -27,6 +25,13 @@ public class UploadFile {
     private String originName;
 
     private String user;
+
+    private String md5;
+
+    @Column(name = "mimetype")
+    private String mimetype;
+
+    private Long size;
 
     @Column(name = "create_time")
     @CreationTimestamp

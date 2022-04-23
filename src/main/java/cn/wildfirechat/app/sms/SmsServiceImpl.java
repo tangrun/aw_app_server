@@ -17,13 +17,16 @@ import com.tencentcloudapi.common.profile.HttpProfile;
 import com.tencentcloudapi.sms.v20210111.SmsClient;
 import com.tencentcloudapi.sms.v20210111.models.SendSmsRequest;
 import com.tencentcloudapi.sms.v20210111.models.SendSmsResponse;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
+import java.net.URI;
+import java.net.URLEncoder;
 
 @Service
 public class SmsServiceImpl implements SmsService {
@@ -44,15 +47,41 @@ public class SmsServiceImpl implements SmsService {
     @Autowired
     private AliyunSMSConfig aliyunSMSConfig;
 
+    @Autowired
+    private LinKaiSMSConfig linKaiSMSConfig;
+
     @Override
     public RestResult.RestCode sendCode(String mobile, String code) {
         if (smsVerdor == 1) {
             return sendTencentCode(mobile, code);
         } else if(smsVerdor == 2) {
             return sendAliyunCode(mobile, code);
+        } else if (smsVerdor == 3) {
+            return sendLinKaiCode(mobile, code);
         } else {
             return RestResult.RestCode.ERROR_SERVER_NOT_IMPLEMENT;
         }
+    }
+
+    private RestResult.RestCode sendLinKaiCode(String mobile, String code) {
+        String msgContent = "您好！您本次的验证码为:" + code + ",如非本人操作请忽略.";
+        try {
+            String send_content = URLEncoder.encode(msgContent, "GBK");
+
+            URI url = new URI(linKaiSMSConfig.getSmsPath() + "?CorpID="
+                    + linKaiSMSConfig.getSmsUser() + "&Pwd=" + linKaiSMSConfig.getSmsPwd() + "&Mobile=" + mobile + "&Content="
+                    + send_content + "&Cell=&SendTime=" + "");
+
+            RestTemplate restTemplate = new RestTemplate();
+
+            String response = restTemplate.getForObject(url, String.class);
+            //System.out.println(response);
+            if (StringUtils.isNotBlank(response) && Integer.parseInt(response) > 1)
+                return RestResult.RestCode.SUCCESS;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return RestResult.RestCode.ERROR_SERVER_ERROR;
     }
 
     private RestResult.RestCode sendTencentCode(String mobile, String code) {

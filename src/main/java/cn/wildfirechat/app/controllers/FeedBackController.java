@@ -4,6 +4,7 @@ import cn.wildfirechat.app.RestResult;
 import cn.wildfirechat.app.jpa.FeedBackEntry;
 import cn.wildfirechat.app.jpa.FeedBackRepository;
 import cn.wildfirechat.app.tools.Utils;
+import cn.wildfirechat.sdk.UserAdmin;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.subject.Subject;
@@ -81,8 +82,19 @@ public class FeedBackController {
             }
         }
 
-        feedBackRepository.save(request);
-        return RestResult.ok(request);
+        if(request.type == 1){
+            // 账号注销
+            try {
+                UserAdmin.updateUserBlockStatus(userId,2);
+                feedBackRepository.save(request);
+                return RestResult.ok(request);
+            }catch (Exception ex){
+                return RestResult.result(1,"申请注销账号失败！" + ex.getMessage(),null);
+            }
+        }else {
+            feedBackRepository.save(request);
+            return RestResult.ok(request);
+        }
     }
 
 

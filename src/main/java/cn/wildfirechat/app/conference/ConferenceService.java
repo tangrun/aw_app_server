@@ -2,12 +2,7 @@ package cn.wildfirechat.app.conference;
 
 
 import cn.wildfirechat.app.RestResult;
-import cn.wildfirechat.app.jpa.FavoriteItem;
-import cn.wildfirechat.app.pojo.*;
-import cn.wildfirechat.pojos.InputCreateDevice;
-import org.springframework.web.multipart.MultipartFile;
-
-import javax.servlet.http.HttpServletResponse;
+import cn.wildfirechat.app.pojo.ConferenceInfo;
 
 public interface ConferenceService {
     RestResult getUserConferenceId(String userId);

@@ -3,12 +3,12 @@ package cn.wildfirechat.app.jpa;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
-import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-@RepositoryRestResource()
+@Repository
 public interface InfoTipsRepository extends CrudRepository<InfoTipsEntry, Long> {
 
     @Query(value = "select * from info_tips where user_id = ?1 and id < ?2 order by id desc limit ?3", nativeQuery = true)

@@ -3,8 +3,8 @@ package cn.wildfirechat.app;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.sdk.model.IMResult;
 
-public class RestResult {
-    public enum  RestCode {
+public class RestResult<T> {
+    public enum RestCode {
         SUCCESS(0, "success"),
         ERROR_INVALID_MOBILE(1, "无效的电话号码"),
         ERROR_SEND_SMS_OVER_FREQUENCY(3, "请求验证码太频繁"),
@@ -25,7 +25,10 @@ public class RestResult {
         ERROR_SESSION_CANCELED(18, "会话已经取消"),
         ERROR_FILE_DOWNLOAD_ERROR(19, "文件下载失败"),
         ERROR_USER_NOT_EXIST(20, "用户不存在"),
-        ERROR_USER_PASSWORD_ERROR(21, "密码错误");
+        ERROR_USER_PASSWORD_ERROR(21, "密码错误"),
+        ERROR_REQUEST_ERROR(22, "请求出错"),
+        ERROR_CREATE_ERROR(23, "创建失败"),
+        ;
         public int code;
         public String msg;
 
@@ -35,39 +38,40 @@ public class RestResult {
         }
 
     }
+
     private int code;
     private String message;
-    private Object result;
+    private T result;
 
-    public static RestResult ok(Object object) {
-        return new RestResult(RestCode.SUCCESS, object);
+    public static <T>  RestResult<T> ok(T object) {
+        return new RestResult<T>(RestCode.SUCCESS, object);
     }
 
-    public static RestResult error(RestCode code) {
-        return new RestResult(code, null);
+    public static <T>  RestResult<T> error(RestCode code) {
+        return new RestResult<T>(code, null);
     }
 
-    public static RestResult result(RestCode code, Object object){
-        return new RestResult(code, object);
+    public static <T> RestResult<T> result(RestCode code, T object) {
+        return new RestResult<T>(code, object);
     }
 
-    public static RestResult result(int code, String message, Object object){
-        RestResult r = new RestResult(RestCode.SUCCESS, object);
+    public static <T> RestResult<T> result(int code, String message, T object) {
+        RestResult<T> r = new RestResult<T>(RestCode.SUCCESS, object);
         r.code = code;
         r.message = message;
         return r;
     }
 
-    public static RestResult result(IMResult<?> imResult) {
+    public static <T> RestResult<T> result(IMResult<?> imResult) {
         return result(imResult, null);
     }
 
-    public static RestResult result(IMResult<?> imResult, String msg) {
+    public static <T> RestResult<T> result(IMResult<?> imResult, String msg) {
         ErrorCode errorCode = imResult.getErrorCode();
         return result(errorCode.code, msg == null ? errorCode.msg : null, null);
     }
 
-    private RestResult(RestCode code, Object result) {
+    private RestResult(RestCode code, T result) {
         this.code = code.code;
         this.message = code.msg;
         this.result = result;
@@ -85,15 +89,17 @@ public class RestResult {
         return message;
     }
 
-    public void setMessage(String message) {
+    public RestResult<T> setMessage(String message) {
         this.message = message;
+        return this;
     }
 
-    public Object getResult() {
+    public T getResult() {
         return result;
     }
 
-    public void setResult(Object result) {
+    public RestResult<T> setResult(T result) {
         this.result = result;
+        return this;
     }
 }

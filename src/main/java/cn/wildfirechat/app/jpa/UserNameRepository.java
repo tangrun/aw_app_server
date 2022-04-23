@@ -1,7 +1,8 @@
 package cn.wildfirechat.app.jpa;
 
 import org.springframework.data.repository.CrudRepository;
-import org.springframework.data.rest.core.annotation.RepositoryRestResource;
+import org.springframework.stereotype.Repository;
 
-@RepositoryRestResource()
+
+@Repository
 public interface UserNameRepository extends CrudRepository<UserNameEntry, Long> {}

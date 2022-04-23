@@ -1,11 +1,14 @@
 package cn.wildfirechat.app.jpa;
 
+import lombok.Data;
+
 import javax.persistence.*;
 
 /**
  * 自己新增
  * 用户密码登录
  */
+@Data
 @Entity
 @Table(name = "t_user_pwd")
 public class UserPwdEntry {
@@ -14,10 +17,8 @@ public class UserPwdEntry {
     @Column(name = "id")
 	private Integer id;
 
-
-
 	@Column(name = "user_id")
-	public String user_id;
+	public String userId;
 
 	@Column(name = "passwd")
 	public String passwd;
@@ -25,34 +26,7 @@ public class UserPwdEntry {
 	@Column(name = "salt")
 	public String salt;
 
-	public Integer getId() {
-		return id;
-	}
-	public void setId(Integer id) {
-		this.id = id;
-	}
+	@Column(name = "mobile")
+	public String mobile;
 
-	public String getUser_id() {
-		return user_id;
-	}
-
-	public void setUser_id(String user_id) {
-		this.user_id = user_id;
-	}
-
-	public String getPasswd() {
-		return passwd;
-	}
-
-	public void setPasswd(String passwd) {
-		this.passwd = passwd;
-	}
-
-	public String getSalt() {
-		return salt;
-	}
-
-	public void setSalt(String salt) {
-		this.salt = salt;
-	}
 }

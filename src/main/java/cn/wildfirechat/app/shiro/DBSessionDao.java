@@ -1,66 +1,65 @@
 package cn.wildfirechat.app.shiro;
 
 import cn.wildfirechat.app.jpa.ShiroSession;
-import cn.wildfirechat.app.jpa.ShiroSessionRepository;
-import com.google.gson.Gson;
 import org.apache.shiro.session.Session;
 import org.apache.shiro.session.UnknownSessionException;
 import org.apache.shiro.session.mgt.SimpleSession;
-import org.apache.shiro.session.mgt.eis.SessionDAO;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.apache.shiro.session.mgt.eis.AbstractSessionDAO;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import java.io.*;
 import java.util.Collection;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
-public class DBSessionDao implements SessionDAO {
-    private Map<Object, Session> sessionMap = new ConcurrentHashMap<>();
+public class DBSessionDao extends AbstractSessionDAO {
 
-    @Autowired
-    private ShiroSessionRepository shiroSessionRepository;
+    @Resource
+    ShiroSessionService shiroSessionService;
 
     @Override
-    public Serializable create(Session session) {
+    protected Serializable doCreate(Session session) {
         String sessionId = UUID.randomUUID().toString().replaceAll("-", "");
         ((SimpleSession) session).setId(sessionId);
         return sessionId;
     }
 
     @Override
-    public Session readSession(Serializable sessionId) throws UnknownSessionException {
-//        return sessionMap.get(sessionId);
-        ShiroSession shiroSession = shiroSessionRepository.findById((String) sessionId).orElse(null);
-        if (shiroSession != null) {
-            Session session = byteToSession(shiroSession.getSessionData());
-            return session;
-        }
-        return null;
+    protected Session doReadSession(Serializable sessionId) {
+        ShiroSession shiroSession = shiroSessionService.getSessionById((String) sessionId);
+        return shiroSession == null ? null : byteToSession(shiroSession.getSessionData());
     }
 
     @Override
     public void update(Session session) throws UnknownSessionException {
-        byte[] bb = sessionToByte(session);
-        ShiroSession shiroSession = new ShiroSession((String)session.getId(), bb);
-//        sessionMap.put(session.getId(), session);
-        shiroSessionRepository.save(shiroSession);
+        shiroSessionService.updateSession((String) session.getId(), sessionToByte(session));
     }
 
     @Override
     public void delete(Session session) {
-        sessionMap.remove(session.getId());
+        shiroSessionService.deleteSession((String) session.getId());
     }
 
     @Override
     public Collection<Session> getActiveSessions() {
-        return sessionMap.values();
+        List<ShiroSession> activeSession = shiroSessionService.getActiveSession();
+        return activeSession.stream()
+                .map(new Function<ShiroSession, Session>() {
+                    @Override
+                    public Session apply(ShiroSession shiroSession) {
+                        return byteToSession(shiroSession.getSessionData());
+                    }
+                })
+                .collect(Collectors.toList());
     }
 
+
     // convert session object to byte, then store it to redis
-    private byte[] sessionToByte(Session session){
+    private byte[] sessionToByte(Session session) {
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
         byte[] bytes = null;
         try {
@@ -74,7 +73,7 @@ public class DBSessionDao implements SessionDAO {
     }
 
     // restore session
-    private Session byteToSession(byte[] bytes){
+    private Session byteToSession(byte[] bytes) {
         ByteArrayInputStream bi = new ByteArrayInputStream(bytes);
         ObjectInputStream in;
         SimpleSession session = null;
@@ -89,4 +88,5 @@ public class DBSessionDao implements SessionDAO {
 
         return session;
     }
+
 }

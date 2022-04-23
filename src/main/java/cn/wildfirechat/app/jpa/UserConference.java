@@ -2,10 +2,6 @@ package cn.wildfirechat.app.jpa;
 
 import javax.persistence.*;
 
-import java.util.List;
-
-import static javax.persistence.CascadeType.ALL;
-
 @Entity
 @Table(name = "user_conference", uniqueConstraints = {@UniqueConstraint(columnNames = {"userId","conferenceId"})})
 public class UserConference {

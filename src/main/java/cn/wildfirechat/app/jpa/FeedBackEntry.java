@@ -58,4 +58,10 @@ public class FeedBackEntry {
     @Nullable
     public String remark;
 
+    /**
+     * 0、意见反馈；1、账号注销
+     */
+    @Column(name = "type")
+    public int type;
+
 }

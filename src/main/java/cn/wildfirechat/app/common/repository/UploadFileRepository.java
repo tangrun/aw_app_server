@@ -11,4 +11,6 @@ public interface UploadFileRepository extends JpaRepositoryImplementation<Upload
 
     @Query("select u.localPath from UploadFile u where  u.id = :id")
     String findLocalPathById(@Param("id") String id);
+
+    UploadFile findByMd5(String md5);
 }

@@ -4,6 +4,7 @@ import cn.wildfirechat.app.RestResult;
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.common.CommonService;
 import cn.wildfirechat.app.common.entity.UploadFile;
+import cn.wildfirechat.app.common.pojo.IdName;
 import cn.wildfirechat.app.common.pojo.Page;
 import cn.wildfirechat.app.work.report.entity.WorkReportEntry;
 import cn.wildfirechat.app.work.report.entity.WorkReportToEntry;
@@ -12,8 +13,7 @@ import cn.wildfirechat.app.work.report.pojo.InputWorkReportRequest;
 import cn.wildfirechat.app.work.report.pojo.VOWorkReport;
 import cn.wildfirechat.app.work.report.repository.WorkReportRepository;
 import cn.wildfirechat.app.work.report.repository.WorkReportTempRepository;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -25,8 +25,8 @@ import javax.annotation.Nullable;
 import javax.annotation.Resource;
 import java.util.*;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class WorkReportService {
@@ -43,9 +43,16 @@ public class WorkReportService {
     @Resource
     CommonService commonService;
 
+    public RestResult getReportInfoById(Long reportId) {
+        Assert.notNull(reportId, "id不能为空");
+        WorkReportEntry entry = workReportRepository.findById(reportId).orElse(null);
+        if (entry == null) return RestResult.error(RestResult.RestCode.ERROR_NOT_EXIST);
+        return RestResult.ok(convert2VO(entry));
+    }
 
     @Transactional
     public RestResult deleteReport(Long reportId, String userId) {
+        Assert.notNull(reportId, "id不能为空");
         WorkReportEntry workReportEntry = workReportRepository.findById(reportId).orElse(null);
 
         Assert.notNull(workReportEntry, "对象不存在");
@@ -74,54 +81,41 @@ public class WorkReportService {
         Assert.notNull(workReportType, "类型不能为空");
         workReportEntry.setType(workReportType);
 
-        if (request.getAttachment() != null) {
-            String join = StringUtils.join(request.getAttachment()
-                    .stream()
-                    .filter(new Predicate<MultipartFile>() {
-                        @Override
-                        public boolean test(MultipartFile file) {
-                            return !file.isEmpty() && file.getSize() > 0;
-                        }
-                    })
-                    .map(new Function<MultipartFile, String>() {
-                        @Override
-                        public String apply(MultipartFile file) {
-                            UploadFile uploadFile = commonService.uploadFile(userId, file);
-                            return commonService.localFileDownloadDomain + uploadFile.getId();
-                        }
-                    }).collect(Collectors.toList()), ",");
-            if (StringUtils.isNotBlank(join)) {
-                workReportEntry.setAttachment(join);
-            }
-        }
+        Stream<String> newAttachments = ObjectUtils.defaultIfNull(request.getAttachment(), new ArrayList<MultipartFile>())
+                .stream()
+                .map((v) -> {
+                    if (v != null && v.getSize() > 0) {
+                        UploadFile uploadFile = commonService.uploadFile(userId, v);
+                        return commonService.getDownloadPath(uploadFile);
+                    }
+                    return null;
+                })
+                .filter((v) -> !Objects.isNull(v));
+        List<String> finalAttachments = Stream
+                .concat(ObjectUtils.defaultIfNull(request.getAttachmentOld(), new ArrayList<String>()).stream(), newAttachments)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toList());
+
+        workReportEntry.setAttachment(StringUtils.join(finalAttachments, ","));
+
         workReportRepository.saveAndFlush(workReportEntry);
 
-        if (StringUtils.isNotBlank(request.getReportTo())) {
-            if (reportId != null)
-                workReportTempRepository.deleteAllByReportId(reportId);
-            Map<String, String> map = new Gson().fromJson(request.getReportTo(), new TypeToken<Map<String, String>>() {
-            }.getType());
-            List<WorkReportToEntry> list = map.entrySet().stream().map(new Function<Map.Entry<String, String>, WorkReportToEntry>() {
-                @Override
-                public WorkReportToEntry apply(Map.Entry<String, String> entry) {
-                    adminService.sendWorkReportMessage(userId, entry.getKey(), workReportEntry);
+        if (reportId != null)
+            workReportTempRepository.deleteAllByReportId(reportId);
+        List<WorkReportToEntry> list = request.getReportTo().stream()
+                .map((idName) -> {
                     return WorkReportToEntry.builder()
                             .reportId(workReportEntry.getId())
-                            .targetId(entry.getKey())
-                            .targetName(entry.getValue())
+                            .targetId(idName.getId())
+                            .targetName(idName.getName())
                             .build();
-                }
-            }).collect(Collectors.toList());
-            workReportTempRepository.saveAll(list);
-        }
+                }).collect(Collectors.toList());
+        workReportTempRepository.saveAll(list);
 
-//        if (StringUtils.isNotBlank(request.getSendTo())) {
-//            List<String> sendTo = new Gson().fromJson(request.getSendTo(), new TypeToken<List<String>>() {
-//            }.getType());
-//            for (String s : sendTo) {
-//                adminService.sendWorkReportMessage(userId, s, workReportEntry);
-//            }
-//        }
+        VOWorkReport voWorkReport = convert2VO(workReportEntry);
+        for (IdName idName : request.getSendTo()) {
+            adminService.sendWorkReportMessageToGroup(userId, idName.getId(), voWorkReport);
+        }
 
         return RestResult.ok(null);
     }
@@ -145,27 +139,7 @@ public class WorkReportService {
                 .stream().map(new Function<WorkReportEntry, VOWorkReport>() {
                     @Override
                     public VOWorkReport apply(WorkReportEntry entry) {
-                        VOWorkReport voWorkReport = new VOWorkReport();
-
-                        BeanUtils.copyProperties(entry, voWorkReport);
-                        voWorkReport.setType(entry.getType().toString());
-
-                        List<WorkReportToEntry> all = workReportTempRepository.findAllByReportId(entry.getId());
-                        voWorkReport.setReportTo(all
-                                .stream()
-                                .collect(Collectors.toMap(new Function<WorkReportToEntry, String>() {
-                                    @Override
-                                    public String apply(WorkReportToEntry workReportToEntry) {
-                                        return workReportToEntry.getTargetId();
-                                    }
-                                }, new Function<WorkReportToEntry, String>() {
-                                    @Override
-                                    public String apply(WorkReportToEntry workReportToEntry) {
-                                        return workReportToEntry.getTargetName();
-                                    }
-                                })));
-
-                        return voWorkReport;
+                        return convert2VO(entry);
                     }
                 }).collect(Collectors.toList());
 
@@ -173,5 +147,31 @@ public class WorkReportService {
         return RestResult.ok(list);
     }
 
+
+    private VOWorkReport convert2VO(WorkReportEntry entry) {
+        VOWorkReport voWorkReport = new VOWorkReport();
+
+        BeanUtils.copyProperties(entry, voWorkReport);
+        voWorkReport.setType(entry.getType().toString());
+
+        List<WorkReportToEntry> all = workReportTempRepository.findAllByReportId(entry.getId());
+
+        Map<String, String> map = new HashMap<>();
+        List<IdName> list1 = new ArrayList<>();
+
+        for (WorkReportToEntry toEntry : all) {
+            map.put(toEntry.getTargetId(), toEntry.getTargetName());
+            list1.add(new IdName(toEntry.getTargetId(), toEntry.getTargetName()));
+        }
+
+        voWorkReport.setReportTo(map);
+        voWorkReport.setReportToList(list1);
+
+        if (StringUtils.isNotBlank(entry.getAttachment())) {
+            voWorkReport.setAttachmentList(Arrays.asList(entry.getAttachment().split(",")));
+        }
+
+        return voWorkReport;
+    }
 
 }

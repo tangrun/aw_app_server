@@ -1,10 +1,7 @@
 package cn.wildfirechat.app.shiro;
 
 import cn.wildfirechat.app.RestResult;
-import cn.wildfirechat.app.jpa.PCSession;
-import cn.wildfirechat.app.jpa.PCSessionRepository;
-import cn.wildfirechat.app.jpa.Record;
-import cn.wildfirechat.app.jpa.RecordRepository;
+import cn.wildfirechat.app.jpa.*;
 import cn.wildfirechat.app.pojo.SessionOutput;
 import cn.wildfirechat.app.tools.Utils;
 import org.slf4j.Logger;
@@ -12,12 +9,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 import static cn.wildfirechat.app.RestResult.RestCode.*;
 import static cn.wildfirechat.app.jpa.PCSession.PCSessionStatus.*;
@@ -33,6 +29,9 @@ public class AuthDataSource {
 
     @Autowired
     private RecordRepository recordRepository;
+
+    @Autowired
+    private UserPwdRepository userPwdRepository;
 
     public RestResult.RestCode insertRecord(String mobile, String code) {
         if (!Utils.isMobile(mobile)) {
@@ -62,6 +61,16 @@ public class AuthDataSource {
 
     public void clearRecode(String mobile) {
         recordRepository.deleteById(mobile);
+    }
+
+    public RestResult.RestCode verifyPassword(String username, String password) {
+        //判断用户是否已经设置密码
+        UserPwdEntry userPwdEntry = userPwdRepository.findByMobile(username);
+        if(userPwdEntry != null && userPwdEntry.passwd.equals(DigestUtils.md5DigestAsHex(password.getBytes()))){
+            // 密码不正确时
+            return RestResult.RestCode.SUCCESS;
+        }
+        return RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
     }
 
     public RestResult.RestCode verifyCode(String mobile, String code) {

@@ -1,8 +1,8 @@
 package cn.wildfirechat.app.work.report.pojo;
 
+import cn.wildfirechat.app.common.pojo.IdName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
@@ -25,7 +25,11 @@ public class VOWorkReport {
 
     public String attachment;
 
+    public List<String> attachmentList;
+
     public Map<String,String> reportTo;
+
+    public List<IdName> reportToList;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     public Date createTime;
