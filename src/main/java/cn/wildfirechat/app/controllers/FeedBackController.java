@@ -1,6 +1,7 @@
 package cn.wildfirechat.app.controllers;
 
 import cn.wildfirechat.app.RestResult;
+import cn.wildfirechat.app.UserService;
 import cn.wildfirechat.app.jpa.FeedBackEntry;
 import cn.wildfirechat.app.jpa.FeedBackRepository;
 import cn.wildfirechat.app.tools.Utils;
@@ -31,6 +32,9 @@ public class FeedBackController {
     @Autowired
     private FeedBackRepository feedBackRepository;
 
+    @Autowired
+    private UserService userService;
+
     /**
      * 意见反馈
      *
@@ -41,7 +45,7 @@ public class FeedBackController {
     public RestResult addFeedback(@RequestBody FeedBackEntry request) {
         Subject subject = SecurityUtils.getSubject();
         String userId = (String) subject.getSession().getAttribute("userId");
-        request.user_id = userId;
+        request.userId = userId;
         request.create_time = new Date();
 
         // 图片处理
@@ -85,9 +89,8 @@ public class FeedBackController {
         if(request.type == 1){
             // 账号注销
             try {
-                UserAdmin.updateUserBlockStatus(userId,2);
                 feedBackRepository.save(request);
-                return RestResult.ok(request);
+                return userService.loginOut(userId);
             }catch (Exception ex){
                 return RestResult.result(1,"申请注销账号失败！" + ex.getMessage(),null);
             }

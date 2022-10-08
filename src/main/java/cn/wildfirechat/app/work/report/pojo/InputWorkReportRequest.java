@@ -1,6 +1,6 @@
 package cn.wildfirechat.app.work.report.pojo;
 
-import cn.wildfirechat.app.common.pojo.IdName;
+import cn.wildfirechat.app.common.pojo.IdNamePojo;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,11 +28,11 @@ public class InputWorkReportRequest {
     /**
      * json对象字符串 key -value id-name
      */
-    public List<IdName> reportTo;
+    public List<IdNamePojo> reportTo;
 
     /**
      * json数组字符串 id
      */
-    public List<IdName> sendTo;
+    public List<IdNamePojo> sendTo;
 
 }

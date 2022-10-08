@@ -27,202 +27,74 @@
 	</properties>
 
 	<dependencies>
-
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-ui</artifactId>
-			<version>1.5.10</version>
-		</dependency>
-
+		<!-- spring -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-starter-logging</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-rest</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-log4j2</artifactId>
 		</dependency>
-
+		<!-- log4j2 异步需要 -->
 		<dependency>
-			<groupId>mysql</groupId>
-			<artifactId>mysql-connector-java</artifactId>
-			<version>8.0.16</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.google.code.gson</groupId>
-			<artifactId>gson</artifactId>
-			<version>2.8.2</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.google.protobuf</groupId>
-			<artifactId>protobuf-java</artifactId>
-			<version>2.5.0</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-slf4j-impl</artifactId>
-			<version>${log4j2.version}</version>
+			<groupId>com.lmax</groupId>
+			<artifactId>disruptor</artifactId>
+			<version>3.4.2</version>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-api</artifactId>
-			<version>${log4j2.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-core</artifactId>
-			<version>${log4j2.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.logging.log4j</groupId>
-			<artifactId>log4j-to-slf4j</artifactId>
-			<version>${log4j2.version}</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
-
 		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
-			<version>2.5</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.googlecode.json-simple</groupId>
-			<artifactId>json-simple</artifactId>
-			<version>1.1.1</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<version>1.7.5</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-log4j12</artifactId>
-			<version>1.7.5</version>
-		</dependency>
-
-
-		<dependency>
-			<groupId>commons-httpclient</groupId>
-			<artifactId>commons-httpclient</artifactId>
-			<version>3.1</version>
-		</dependency>
-
-		<dependency>
-			<groupId>uk.org.lidalia</groupId>
-			<artifactId>slf4j-test</artifactId>
-			<version>1.0.0-jdk6</version>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-all</artifactId>
-			<version>1.9.5</version>
-			<type>jar</type>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>com.tencentcloudapi</groupId>
-			<artifactId>tencentcloud-sdk-java</artifactId>
-			<version>3.1.410</version>
-		</dependency>
-
-		<dependency>
-			<groupId>cn.wildfirechat</groupId>
-			<artifactId>sdk</artifactId>
-			<version>${wfc.sdk.version}</version>
-			<scope>system</scope>
-			<systemPath>${project.basedir}/src/lib/sdk-${wfc.sdk.version}.jar</systemPath>
-		</dependency>
-
-		<dependency>
-			<groupId>cn.wildfirechat</groupId>
-			<artifactId>common</artifactId>
-			<version>${wfc.sdk.version}</version>
-			<scope>system</scope>
-			<systemPath>${project.basedir}/src/lib/common-${wfc.sdk.version}.jar</systemPath>
-		</dependency>
-
-
-		<dependency>
-			<groupId>com.aliyun</groupId>
-			<artifactId>aliyun-java-sdk-core</artifactId>
-			<version>4.1.0</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.qiniu</groupId>
-			<artifactId>qiniu-java-sdk</artifactId>
-			<version>7.3.0</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.aliyun.oss</groupId>
-			<artifactId>aliyun-sdk-oss</artifactId>
-			<version>3.10.2</version>
-		</dependency>
-
-		<dependency>
-			<groupId>io.minio</groupId>
-			<artifactId>minio</artifactId>
-			<version>7.0.2</version>
-		</dependency>
-		<dependency>
-			<groupId>com.google.guava</groupId>
-			<artifactId>guava</artifactId>
-			<version>25.1-jre</version>
-		</dependency>
-
+		<!-- shiro -->
 		<dependency>
 			<groupId>org.apache.shiro</groupId>
 			<artifactId>shiro-spring</artifactId>
 			<version>1.5.3</version>
 		</dependency>
-
-        <dependency>
-            <groupId>ws.schild</groupId>
-            <artifactId>jave-all-deps</artifactId>
-            <version>2.7.3</version>
-        </dependency>
-
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-mail</artifactId>
+			<groupId>org.crazycake</groupId>
+			<artifactId>shiro-redis</artifactId>
+			<version>3.3.1</version>
 		</dependency>
-
+		<!-- 数据库 -->
 		<dependency>
-			<groupId>com.googlecode.json-simple</groupId>
-			<artifactId>json-simple</artifactId>
-			<version>1.1.1</version>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
 		</dependency>
-
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>8.0.16</version>
+		</dependency>
+		<!-- 工具类 -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -232,7 +104,102 @@
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
 		</dependency>
-	</dependencies>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.5</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.tika</groupId>
+			<artifactId>tika-core</artifactId>
+			<version>2.2.1</version>
+		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>commons-httpclient</groupId>-->
+<!--			<artifactId>commons-httpclient</artifactId>-->
+<!--			<version>3.1</version>-->
+<!--		</dependency>-->
+		<!-- 协议 解析 -->
+		<dependency>
+			<groupId>com.google.code.gson</groupId>
+			<artifactId>gson</artifactId>
+			<version>2.8.2</version>
+		</dependency>
+<!--		<dependency>-->
+<!--			<groupId>com.google.guava</groupId>-->
+<!--			<artifactId>guava</artifactId>-->
+<!--			<version>25.1-jre</version>-->
+<!--		</dependency>-->
+		<!-- IM SDK -->
+		<dependency>
+			<groupId>cn.wildfirechat</groupId>
+			<artifactId>sdk</artifactId>
+			<version>${wfc.sdk.version}</version>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/src/lib/sdk-${wfc.sdk.version}.jar</systemPath>
+		</dependency>
+		<dependency>
+			<groupId>cn.wildfirechat</groupId>
+			<artifactId>common</artifactId>
+			<version>${wfc.sdk.version}</version>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/src/lib/common-${wfc.sdk.version}.jar</systemPath>
+		</dependency>
+		<dependency>
+			<groupId>com.google.protobuf</groupId>
+			<artifactId>protobuf-java</artifactId>
+			<version>2.5.0</version>
+		</dependency>
+		<!-- 腾讯短信 -->
+		<dependency>
+			<groupId>com.tencentcloudapi</groupId>
+			<artifactId>tencentcloud-sdk-java</artifactId>
+			<version>3.1.410</version>
+		</dependency>
+		<!-- 七牛云存储 -->
+		<dependency>
+			<groupId>com.qiniu</groupId>
+			<artifactId>qiniu-java-sdk</artifactId>
+			<version>7.3.0</version>
+		</dependency>
+		<!-- 阿里云短信 -->
+		<dependency>
+			<groupId>com.aliyun</groupId>
+			<artifactId>aliyun-java-sdk-core</artifactId>
+			<version>4.1.0</version>
+		</dependency>
+		<!-- 阿里云存储 -->
+		<dependency>
+			<groupId>com.aliyun.oss</groupId>
+			<artifactId>aliyun-sdk-oss</artifactId>
+			<version>3.10.2</version>
+		</dependency>
+		<!-- minio 野火云存储 -->
+		<dependency>
+			<groupId>io.minio</groupId>
+			<artifactId>minio</artifactId>
+			<version>7.0.2</version>
+		</dependency>
+		<!-- 音视频转码 -->
+        <dependency>
+            <groupId>ws.schild</groupId>
+            <artifactId>jave-all-deps</artifactId>
+            <version>2.7.3</version>
+        </dependency>
+		<!-- 测试 -->
+		<dependency>
+			<groupId>org.mockito</groupId>
+			<artifactId>mockito-all</artifactId>
+			<version>1.9.5</version>
+			<type>jar</type>
+			<scope>test</scope>
+		</dependency>
+        <dependency>
+            <groupId>com.querydsl</groupId>
+            <artifactId>querydsl-core</artifactId>
+            <version>4.2.2</version>
+        </dependency>
+    </dependencies>
 
 	<build>
 		<plugins>
@@ -242,6 +209,40 @@
 				<configuration>
 					<includeSystemScope>true</includeSystemScope>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>com.github.shalousun</groupId>
+				<artifactId>smart-doc-maven-plugin</artifactId>
+				<version>2.3.7</version>
+				<configuration>
+					<!--指定生成文档的使用的配置文件,配置文件放在自己的项目中-->
+					<configFile>./src/main/resources/smart-doc.json</configFile>
+					<!--指定项目名称-->
+					<projectName>AW-App-Server</projectName>
+					<!--smart-doc实现自动分析依赖树加载第三方依赖的源码，如果一些框架依赖库加载不到导致报错，这时请使用excludes排除掉-->
+					<excludes>
+						<!--格式为：groupId:artifactId;参考如下-->
+						<!--也可以支持正则式如：com.alibaba:.* -->
+<!--						<exclude>com.alibaba:fastjson</exclude>-->
+					</excludes>
+					<!--includes配置用于配置加载外部依赖源码,配置后插件会按照配置项加载外部源代码而不是自动加载所有，因此使用时需要注意-->
+					<!--smart-doc能自动分析依赖树加载所有依赖源码，原则上会影响文档构建效率，因此你可以使用includes来让插件加载你配置的组件-->
+					<includes>
+						<!--格式为：groupId:artifactId;参考如下-->
+						<!--也可以支持正则式如：com.alibaba:.* -->
+<!--						<include>com.alibaba:fastjson</include>-->
+					</includes>
+				</configuration>
+				<executions>
+					<execution>
+						<!--如果不需要在执行编译时启动smart-doc，则将phase注释掉-->
+<!--						<phase>compile</phase>-->
+						<goals>
+							<!--smart-doc提供了html、openapi、markdown等goal，可按需配置-->
+							<goal>html</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

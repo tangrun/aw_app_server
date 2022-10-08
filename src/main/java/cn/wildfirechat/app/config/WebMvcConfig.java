@@ -6,20 +6,28 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.CollectionFactory;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.TypeDescriptor;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.GenericConverter;
+import org.springframework.format.Formatter;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Set;
+import java.text.ParseException;
+import java.util.*;
 
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addFormatters(FormatterRegistry registry) {
+        registry.addConverter(new Converter<String, Date>() {
+            @Override
+            public Date convert(String source) {
+                long l = Long.parseLong(source);
+                return new Date(l);
+            }
+        });
         registry.addConverter(new GenericConverter() {
             @Override
             public Set<ConvertiblePair> getConvertibleTypes() {

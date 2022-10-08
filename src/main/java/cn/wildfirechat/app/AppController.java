@@ -2,8 +2,10 @@ package cn.wildfirechat.app;
 
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.common.CommonService;
+import cn.wildfirechat.app.common.consts.SessionAttributes;
 import cn.wildfirechat.app.common.entity.UploadFile;
 import cn.wildfirechat.app.jpa.FavoriteItem;
+import cn.wildfirechat.app.jpa.UserEntity;
 import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.tools.Invoker;
 import cn.wildfirechat.app.tools.Utils;
@@ -22,6 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.Assert;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +46,9 @@ public class AppController {
 
     @Autowired
     private CommonService commonService;
+
+    @Autowired
+    private UserService userService;
 
     @Value("${call.server.host}")
     private String callServerHost;
@@ -156,7 +162,7 @@ public class AppController {
      */
     @PostMapping(value = "/send_code", produces = "application/json;charset=UTF-8")
     public Object sendCode(@RequestBody SendCodeRequest request) {
-        return mService.sendCode(request.getMobile());
+        return userService.sendCode(request.getMobile());
     }
 
     /**
@@ -168,7 +174,7 @@ public class AppController {
      */
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
     public Object login(@RequestBody LoginRequest request, HttpServletResponse response) {
-        return mService.login(response, request.getMobile(), request.getCode(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
+        return userService.loginBySMSCode(response, request);
     }
 
     /**
@@ -181,42 +187,74 @@ public class AppController {
     @PostMapping(value = "/api/login", produces = "application/json;charset=UTF-8")
     public Object loginByPwd(@RequestBody LoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
-        return mService.loginByPwd(response, request);
+        return userService.loginByPwd(response, request);
+    }
+
+    /**
+     * 三方登录
+     *
+     * @param request
+     * @param response
+     * @return
+     */
+    @PostMapping(value = "/api/otherLogin", produces = "application/json;charset=UTF-8")
+    public Object loginOther(@RequestBody LoginRequest request, HttpServletResponse response) {
+        request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
+        return userService.loginByOther(response, request);
+    }
+
+    /**
+     * 绑定三方账号
+     *
+     * @param request
+     * @return
+     */
+    @PostMapping(value = "/api/bindOtherAccount", produces = "application/json;charset=UTF-8")
+    public RestResult<Void> setBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId, @RequestBody LoginRequest request) {
+        return userService.setBindOtherAccount(userId, request.getPlatform(),request.getCode());
+    }
+
+    /**
+     * 绑定三方账号
+     *
+     * @return
+     */
+    @PostMapping(value = "/api/otherAccount", produces = "application/json;charset=UTF-8")
+    public RestResult<OtherAccountResponse> getBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId) {
+        return userService.getOtherAccount(userId);
     }
 
     /**
      * 设置密码
      *
      * @param request
-     * @param response
      * @return
      */
     @PostMapping(value = "/api/setpwd", produces = "application/json;charset=UTF-8")
-    public Object setPassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
-        return mService.setPassword(response, request);
+    public RestResult<Void> setPassword(@SessionAttribute(SessionAttributes.userId) String userId, @Validated(ChangePasswordRequest.Set.class) @RequestBody ChangePasswordRequest request) {
+        return userService.setPassword(userId, request.getNewPwd());
     }
 
     /**
      * 修改密码
+     *
      * @param request
-     * @param response
      * @return
      */
     @PostMapping(value = "/api/changePwd", produces = "application/json;charset=UTF-8")
-    public Object changePassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
-        return mService.changePassword(response, request);
+    public RestResult<Void> changePassword(@SessionAttribute(SessionAttributes.userId) String userId, @Validated(ChangePasswordRequest.Reset.class) @RequestBody ChangePasswordRequest request) {
+        return userService.resetPassword(userId, request.getOldPwd(), request.getNewPwd());
     }
 
     /**
      * 忘记密码
      *
      * @param request
-     * @param response
      * @return
      */
     @PostMapping(value = "/api/forgetPassword", produces = "application/json;charset=UTF-8")
-    public Object setForgetPassword(@RequestBody ChangePasswordRequest request, HttpServletResponse response) {
-        return mService.forgetPassword(response, request);
+    public RestResult<Void> setForgetPassword(@Validated(ChangePasswordRequest.Forget.class) @RequestBody ChangePasswordRequest request) {
+        return userService.forgetPassword(request.getMobile(), request.getCode(), request.getNewPwd());
     }
 
     /*

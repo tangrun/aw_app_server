@@ -40,12 +40,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.util.Assert;
 import org.springframework.util.Base64Utils;
 import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
@@ -55,9 +53,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.URL;
-import java.net.UnknownHostException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -75,9 +71,6 @@ public class ServiceImpl implements Service {
     private AdminService adminService;
 
     @Autowired
-    private SmsService smsService;
-
-    @Autowired
     private IMConfig mIMConfig;
 
     @Autowired
@@ -87,13 +80,10 @@ public class ServiceImpl implements Service {
     private FavoriteRepository favoriteRepository;
 
     @Autowired
-    private UserPwdRepository userPwdRepository;
+    private UserService userService;
 
     @Autowired
     private UserLogRepository userLogRepository;
-
-    @Value("${sms.super_code}")
-    private String superCode;
 
     @Value("${logs.user_logs_path}")
     private String userLogPath;
@@ -104,7 +94,6 @@ public class ServiceImpl implements Service {
     @Autowired
     private AuthDataSource authDataSource;
 
-    private RateLimiter rateLimiter;
 
     @Value("${wfc.compat_pc_quick_login}")
     protected boolean compatPcQuickLogin;
@@ -170,479 +159,12 @@ public class ServiceImpl implements Service {
     @PostConstruct
     private void init() {
         AdminConfig.initAdmin(mIMConfig.admin_url, mIMConfig.admin_secret);
-        rateLimiter = new RateLimiter(60, 200);
     }
 
-    private String getIp() {
-        ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        HttpServletRequest request = requestAttributes.getRequest();
-//        String ip = request.getHeader("X-Real-IP");
-//        if (!StringUtils.isEmpty(ip) && !"unknown".equalsIgnoreCase(ip)) {
-//            return ip;
-//        }
-//        ip = request.getHeader("X-Forwarded-For");
-//        if (!StringUtils.isEmpty(ip) && !"unknown".equalsIgnoreCase(ip)) {
-//            // 多次反向代理后会有多个IP值，第一个为真实IP。
-//            int index = ip.indexOf(',');
-//            if (index != -1) {
-//                return ip.substring(0, index);
-//            } else {
-//                return ip;
-//            }
-//        } else {
-//            return request.getRemoteAddr();
-//        }
-
-
-        // 获取请求主机IP地址,如果通过代理进来，则透过防火墙获取真实IP地址
-        String headerName = "x-forwarded-for";
-        String ip = request.getHeader(headerName);
-        if (null != ip && ip.length() != 0 && !"unknown".equalsIgnoreCase(ip)) {
-            // 多次反向代理后会有多个IP值，第一个IP才是真实IP,它们按照英文逗号','分割
-            if (ip.indexOf(",") != -1) {
-                ip = ip.split(",")[0];
-            }
-        }
-        if (checkIp(ip)) {
-            headerName = "Proxy-Client-IP";
-            ip = request.getHeader(headerName);
-        }
-        if (checkIp(ip)) {
-            headerName = "WL-Proxy-Client-IP";
-            ip = request.getHeader(headerName);
-        }
-        if (checkIp(ip)) {
-            headerName = "HTTP_CLIENT_IP";
-            ip = request.getHeader(headerName);
-        }
-        if (checkIp(ip)) {
-            headerName = "HTTP_X_FORWARDED_FOR";
-            ip = request.getHeader(headerName);
-        }
-        if (checkIp(ip)) {
-            headerName = "X-Real-IP";
-            ip = request.getHeader(headerName);
-        }
-        if (checkIp(ip)) {
-            return request.getRemoteAddr();
-        }
-        return ip;
-    }
-
-    private boolean checkIp(String ip) {
-        if (null == ip || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 获取用户真实IP地址，不使用request.getRemoteAddr();的原因是有可能用户使用了代理软件方式避免真实IP地址,
-     *
-     * 可是，如果通过了多级反向代理的话，X-Forwarded-For的值并不止一个，而是一串IP值，究竟哪个才是真正的用户端的真实IP呢？
-     * 答案是取X-Forwarded-For中第一个非unknown的有效IP字符串。
-     *
-     * 如：X-Forwarded-For：192.168.1.110, 192.168.1.120, 192.168.1.130,
-     * 192.168.1.100
-     *
-     * 用户真实IP为： 192.168.1.110
-     *
-     * @return
-     */
-    public static String getIpAddress() {
-        ServletRequestAttributes requestAttributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        HttpServletRequest request = requestAttributes.getRequest();
-        String ip = request.getHeader("x-forwarded-for");
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_CLIENT_IP");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-            if("127.0.0.1".equals(ip)||"0:0:0:0:0:0:0:1".equals(ip)){
-                //根据网卡取本机配置的IP
-                InetAddress inet=null;
-                try {
-                    inet = InetAddress.getLocalHost();
-                } catch (UnknownHostException e) {
-                    e.printStackTrace();
-                }
-                ip= inet.getHostAddress();
-            }
-        }
-        return ip;
-    }
-
-
-    @Override
-    public RestResult sendCode(String mobile) {
-        String remoteIp = getIpAddress();//getIp();
-        LOG.info("request send sms from {}", remoteIp);
-
-        //判断当前IP发送是否超频。
-        //另外 cn.wildfirechat.app.shiro.AuthDataSource.Count 会对用户发送消息限频
-        if (!rateLimiter.isGranted(remoteIp)) {
-            return RestResult.result(ERROR_SEND_SMS_OVER_FREQUENCY.code, "IP " + remoteIp + " 请求短信超频", null);
-        }
-
-        try {
-            String code = Utils.getRandomCode(4);
-            RestResult.RestCode restCode = authDataSource.insertRecord(mobile, code);
-
-            if (restCode != SUCCESS) {
-                return RestResult.error(restCode);
-            }
-
-            restCode = smsService.sendCode(mobile, code);
-            if (restCode == RestResult.RestCode.SUCCESS) {
-                return RestResult.ok(restCode);
-            } else {
-                authDataSource.clearRecode(mobile);
-                return RestResult.error(restCode);
-            }
-        } catch (Exception e) {
-            // json解析错误
-            e.printStackTrace();
-            authDataSource.clearRecode(mobile);
-        }
-        return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-    }
-
-    @Override
-    public RestResult login(HttpServletResponse httpResponse, String mobile, String code, String clientId, int platform) {
-        Subject subject = SecurityUtils.getSubject();
-        // 在认证提交前准备 token（令牌）
-        UsernameCodeToken token = new UsernameCodeToken(mobile, code);
-        // 执行认证登陆
-        try {
-            subject.login(token);
-        } catch (UnknownAccountException uae) {
-            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-        } catch (IncorrectCredentialsException ice) {
-            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
-        } catch (LockedAccountException lae) {
-            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
-        } catch (ExcessiveAttemptsException eae) {
-            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
-        } catch (AuthenticationException ae) {
-            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
-        }
-        if (!subject.isAuthenticated()) {
-            token.clear();
-            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
-        }
-
-        try {
-            //使用电话号码查询用户信息。
-            IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
-
-            //如果用户信息不存在，创建用户
-            InputOutputUserInfo user;
-            boolean isNewUser = false;
-            if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_NOT_EXIST) {
-                LOG.info("User not exist, try to create");
-
-                //获取用户名。如果用的是shortUUID生成器，是有极小概率会重复的，所以需要去检查是否已经存在相同的userName。
-                //ShortUUIDGenerator内的main函数有测试代码，可以观察一下碰撞的概率，这个重复是理论上的，作者测试了几千万次次都没有产生碰撞。
-                //另外由于并发的问题，也有同时生成相同的id并同时去检查的并同时通过的情况，但这种情况概率极低，可以忽略不计。
-                String userName;
-                int tryCount = 0;
-                do {
-                    tryCount++;
-                    userName = userNameGenerator.getUserName(mobile);
-                    if (tryCount > 10) {
-                        return RestResult.error(ERROR_SERVER_ERROR);
-                    }
-                } while (!isUsernameAvailable(userName));
-
-
-                user = new InputOutputUserInfo();
-                user.setName(userName);
-                if (mIMConfig.use_random_name) {
-                    String displayName = "用户" + (int) (Math.random() * 10000);
-                    user.setDisplayName(displayName);
-                } else {
-                    user.setDisplayName(mobile);
-                }
-                user.setMobile(mobile);
-                IMResult<OutputCreateUser> userIdResult = UserAdmin.createUser(user);
-                if (userIdResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
-                    user.setUserId(userIdResult.getResult().getUserId());
-                    isNewUser = true;
-                } else {
-                    LOG.info("Create user failure {}", userIdResult.code);
-                    return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-                }
-
-
-            } else if (userResult.getCode() != 0) {
-                LOG.error("Get user failure {}", userResult.code);
-                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-            } else {
-                user = userResult.getResult();
-            }
-
-            //使用用户id获取token
-            IMResult<OutputGetIMTokenData> tokenResult = UserAdmin.getUserToken(user.getUserId(), clientId, platform);
-            if (tokenResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
-                LOG.error("Get user failure {}", tokenResult.code);
-                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-            }
-
-            subject.getSession().setAttribute("userId", user.getUserId());
-
-            //返回用户id，token和是否新建
-            LoginResponse response = new LoginResponse();
-            response.setUserId(user.getUserId());
-            response.setToken(tokenResult.getResult().getToken());
-            response.setRegister(isNewUser);
-
-            if (isNewUser) {
-                if (!StringUtils.isEmpty(mIMConfig.welcome_for_new_user)) {
-                    sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_new_user);
-                }
-
-                if (mIMConfig.new_user_robot_friend && !StringUtils.isEmpty(mIMConfig.robot_friend_id)) {
-                    RelationAdmin.setUserFriend(user.getUserId(), mIMConfig.robot_friend_id, true, null);
-                    if (!StringUtils.isEmpty(mIMConfig.robot_welcome)) {
-                        sendTextMessage(mIMConfig.robot_friend_id, user.getUserId(), mIMConfig.robot_welcome);
-                    }
-                }
-            } else {
-                if (!StringUtils.isEmpty(mIMConfig.welcome_for_back_user)) {
-                    sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_back_user);
-                }
-            }
-
-            // 存储登录记录
-            UserLogEntry logEntry = new UserLogEntry();
-            logEntry.setUserId(user.getUserId());
-            logEntry.setIp(getIpAddress());
-            logEntry.setLoginTime(new Date());
-            userLogRepository.save(logEntry);
-
-            Object sessionId = subject.getSession().getId();
-            httpResponse.setHeader("authToken", sessionId.toString());
-            return RestResult.ok(response);
-        } catch (Exception e) {
-            e.printStackTrace();
-            LOG.error("Exception happens {}", e);
-            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * 手机号、密码登录
-     *
-     * @param httpResponse
-     * @param request
-     * @return
-     */
-    @Override
-    public RestResult loginByPwd(HttpServletResponse httpResponse, LoginRequest request) {
-        Subject subject = SecurityUtils.getSubject();
-        // 在认证提交前准备 token（令牌）
-        cn.wildfirechat.app.shiro.UsernamePasswordToken token = new UsernamePasswordToken(request.getMobile(), request.getCode());
-        // 执行认证登陆
-        try {
-            subject.login(token);
-        } catch (UnknownAccountException uae) {
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        } catch (IncorrectCredentialsException ice) {
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        } catch (LockedAccountException lae) {
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        } catch (ExcessiveAttemptsException eae) {
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        } catch (AuthenticationException ae) {
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        }
-        if (!subject.isAuthenticated()) {
-            token.clear();
-            return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-        }
-
-        try {
-            //如果用户信息不存在，创建用户
-            InputOutputUserInfo user = adminService.getUserByMobile(request.getMobile());
-            //Assert.notNull(user, "用户不存在");
-            if(user == null){
-                return RestResult.result(1,"账号不存在，请先注册！",null);
-            }
-
-            // 判断用户状态
-            IMResult<OutputUserStatus> userStatus = UserAdmin.checkUserBlockStatus(user.getUserId());
-            if(userStatus.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
-                return RestResult.result(1,"获取用户状态失败！",null);
-            }
-            if(userStatus.getResult().getStatus() >= 2){
-                // 不是正常状态时，提示用户
-                return RestResult.result(1,"账号被禁用或注销！",null);
-            }
-
-
-            //使用用户id获取token
-            IMResult<OutputGetIMTokenData> tokenResult = UserAdmin.getUserToken(user.getUserId(), request.getClientId(), request.getPlatform());
-            if (tokenResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
-                LOG.error("Get user failure {}", tokenResult.code);
-                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-            }
-
-            subject.getSession().setAttribute("userId", user.getUserId());
-
-            //返回用户id，token和是否新建
-            LoginResponse response = new LoginResponse();
-            response.setUserId(user.getUserId());
-            response.setToken(tokenResult.getResult().getToken());
-            response.setRegister(false);
-
-            if (!org.apache.commons.lang3.StringUtils.isBlank(mIMConfig.welcome_for_back_user)) {
-                sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_back_user);
-            }
-
-            // 存储登录记录
-            UserLogEntry logEntry = new UserLogEntry();
-            logEntry.setUserId(user.getUserId());
-            logEntry.setIp(getIp());
-            logEntry.setLoginTime(new Date());
-            logEntry.setDeviceModel(request.getDeviceModel());
-            logEntry.setDeviceVersion(request.getDeviceVersion());
-            logEntry.setAppVersion(request.getAppVersion());
-            userLogRepository.save(logEntry);
-
-            Object sessionId = subject.getSession().getId();
-            httpResponse.setHeader("authToken", sessionId.toString());
-            return RestResult.ok(response);
-        } catch (Exception e) {
-            e.printStackTrace();
-            LOG.error("Exception happens {}", e);
-            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-        }
-    }
-
-    /**
-     * 设置密码
-     *
-     * @param httpResponse
-     * @param request
-     * @return
-     */
-    @Override
-    public RestResult setPassword(HttpServletResponse httpResponse, ChangePasswordRequest request) {
-        Subject subject = SecurityUtils.getSubject();
-        String userId = (String) subject.getSession().getAttribute("userId");
-        //判断用户是否已经设置密码
-        UserPwdEntry userPwdEntry = userPwdRepository.findByUserId(userId);
-
-        if (userPwdEntry == null) {
-            // 没有设置密码时
-            userPwdEntry = new UserPwdEntry();
-
-            InputOutputUserInfo user = adminService.getUserById(userId);
-            Assert.notNull(user, "设置密码失败");
-            userPwdEntry.setMobile(user.getMobile());
-            userPwdEntry.setUserId(userId);
-        }
-
-        userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
-        userPwdRepository.save(userPwdEntry);
-        return RestResult.ok(null);
-    }
-
-    /**
-     * 修改密码
-     *
-     * @param httpResponse
-     * @param request
-     * @return
-     */
-    @Override
-    public RestResult changePassword(HttpServletResponse httpResponse, ChangePasswordRequest request) {
-        Subject subject = SecurityUtils.getSubject();
-        String userId = (String) subject.getSession().getAttribute("userId");
-        //判断用户是否已经设置密码
-        UserPwdEntry userPwdEntry = userPwdRepository.findByUserId(userId);
-        if (userPwdEntry == null) {
-            // 没有设置密码时
-            userPwdEntry = new UserPwdEntry();
-            userPwdEntry.setUserId(userId);
-            userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
-            userPwdRepository.save(userPwdEntry);
-            return RestResult.ok(null);
-        } else {
-            // 密码不正确时
-            if (!userPwdEntry.passwd.equals(DigestUtils.md5DigestAsHex(request.getOldPwd().getBytes()))) {
-                return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
-            } else {
-                userPwdEntry.setUserId(userId);
-                userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
-                userPwdRepository.save(userPwdEntry);
-                return RestResult.ok(null);
-            }
-        }
-    }
-
-    /**
-     * 忘记密码
-     *
-     * @param httpResponse
-     * @param request
-     * @return
-     */
-    @Override
-    public RestResult forgetPassword(HttpServletResponse httpResponse, ChangePasswordRequest request) {
-        RestResult.RestCode restCode = authDataSource.verifyCode(request.getMobile(), request.getCode());
-        if (restCode == RestResult.RestCode.SUCCESS) {
-            //判断用户是否已经设置密码
-            InputOutputUserInfo user = adminService.getUserByMobile(request.getMobile());
-            if(user == null){
-                return RestResult.result(1,"账号不存在，请先注册！",null);
-            }
-            //Assert.notNull(user, "设置密码失败");
-
-            UserPwdEntry userPwdEntry = userPwdRepository.findByUserId(user.getUserId());
-            if (userPwdEntry == null) {
-                // 没有设置密码时
-                userPwdEntry = new UserPwdEntry();
-                userPwdEntry.setUserId(user.getUserId());
-                userPwdEntry.setMobile(request.getMobile());
-                userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
-                userPwdRepository.save(userPwdEntry);
-                return RestResult.ok(null);
-            } else {
-                userPwdEntry.setPasswd(DigestUtils.md5DigestAsHex(request.getNewPwd().getBytes()));
-                userPwdRepository.save(userPwdEntry);
-                return RestResult.ok(null);
-            }
-        }else {
-            // 验证失败
-            return RestResult.error(restCode);
-        }
-    }
-
-
-    private boolean isUsernameAvailable(String username) {
-        try {
-            IMResult<InputOutputUserInfo> existUser = UserAdmin.getUserByName(username);
-            if (existUser.code == ErrorCode.ERROR_CODE_NOT_EXIST.code) {
-                return true;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
 
     /**
      * 发送PC端登录消息
+     *
      * @param fromUser
      * @param toUser
      * @param platform
@@ -686,36 +208,6 @@ public class ServiceImpl implements Service {
         }
 
     }
-
-    /**
-     * 发送文本消息
-     * @param fromUser
-     * @param toUser
-     * @param text
-     */
-    private void sendTextMessage(String fromUser, String toUser, String text) {
-        Conversation conversation = new Conversation();
-        conversation.setTarget(toUser);
-        conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
-        MessagePayload payload = new MessagePayload();
-        payload.setType(1);
-        payload.setSearchableContent(text);
-
-
-        try {
-            IMResult<SendMessageResult> resultSendMessage = MessageAdmin.sendMessage(fromUser, conversation, payload);
-            if (resultSendMessage != null && resultSendMessage.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
-                LOG.info("send message success");
-            } else {
-                LOG.error("send message error {}", resultSendMessage != null ? resultSendMessage.getErrorCode().code : "unknown");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            LOG.error("send message error {}", e.getLocalizedMessage());
-        }
-
-    }
-
 
     @Override
     public RestResult createPcSession(CreateSessionRequest request) {
@@ -896,7 +388,7 @@ public class ServiceImpl implements Service {
         Subject subject = SecurityUtils.getSubject();
         String userId = (String) subject.getSession().getAttribute("userId");
         LOG.error("Complain from user {} where content {}", userId, text);
-        sendTextMessage(userId, "EGEPEP77", text);
+        adminService.sendTextMessage(userId, "EGEPEP77", text);
         return RestResult.ok(null);
     }
 

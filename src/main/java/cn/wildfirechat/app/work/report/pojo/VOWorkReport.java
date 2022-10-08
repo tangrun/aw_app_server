@@ -1,6 +1,6 @@
 package cn.wildfirechat.app.work.report.pojo;
 
-import cn.wildfirechat.app.common.pojo.IdName;
+import cn.wildfirechat.app.common.pojo.IdNamePojo;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
@@ -29,7 +29,7 @@ public class VOWorkReport {
 
     public Map<String,String> reportTo;
 
-    public List<IdName> reportToList;
+    public List<IdNamePojo> reportToList;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     public Date createTime;

@@ -24,10 +24,13 @@ public class RestResult<T> {
         ERROR_USER_NAME_ALREADY_EXIST(17, "用户名已经存在"),
         ERROR_SESSION_CANCELED(18, "会话已经取消"),
         ERROR_FILE_DOWNLOAD_ERROR(19, "文件下载失败"),
-        ERROR_USER_NOT_EXIST(20, "用户不存在"),
-        ERROR_USER_PASSWORD_ERROR(21, "密码错误"),
+        ERROR_USER_NOT_EXIST(20, "账号不存在，请先注册"),
+        ERROR_USER_PASSWORD_ERROR(21, "账号或密码错误"),
         ERROR_REQUEST_ERROR(22, "请求出错"),
         ERROR_CREATE_ERROR(23, "创建失败"),
+        ERROR_REQUEST_OVER_FREQUENCY(24, "请求太频繁，请稍后再试"),
+        ERROR_USER_NOT_BIND_MOBILE(25, "未绑定手机号"),
+        ERROR_USER_BIND_OTHERID(26, "已有其他账号与之绑定，账号绑定失败！"),
         ;
         public int code;
         public String msg;
@@ -43,8 +46,20 @@ public class RestResult<T> {
     private String message;
     private T result;
 
+    public boolean isSuccess(){
+        return code == RestCode.SUCCESS.code;
+    }
+
+    public static <T>  RestResult<T> ok() {
+        return ok(null);
+    }
+
     public static <T>  RestResult<T> ok(T object) {
         return new RestResult<T>(RestCode.SUCCESS, object);
+    }
+
+    public static <T>  RestResult<T> error(String msg) {
+        return new RestResult<T>(RestCode.ERROR_REQUEST_ERROR, null).setMessage(msg);
     }
 
     public static <T>  RestResult<T> error(RestCode code) {

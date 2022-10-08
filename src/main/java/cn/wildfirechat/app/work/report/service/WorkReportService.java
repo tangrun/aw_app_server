@@ -4,7 +4,7 @@ import cn.wildfirechat.app.RestResult;
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.common.CommonService;
 import cn.wildfirechat.app.common.entity.UploadFile;
-import cn.wildfirechat.app.common.pojo.IdName;
+import cn.wildfirechat.app.common.pojo.IdNamePojo;
 import cn.wildfirechat.app.common.pojo.Page;
 import cn.wildfirechat.app.work.report.entity.WorkReportEntry;
 import cn.wildfirechat.app.work.report.entity.WorkReportToEntry;
@@ -113,7 +113,7 @@ public class WorkReportService {
         workReportTempRepository.saveAll(list);
 
         VOWorkReport voWorkReport = convert2VO(workReportEntry);
-        for (IdName idName : request.getSendTo()) {
+        for (IdNamePojo idName : request.getSendTo()) {
             adminService.sendWorkReportMessageToGroup(userId, idName.getId(), voWorkReport);
         }
 
@@ -157,11 +157,11 @@ public class WorkReportService {
         List<WorkReportToEntry> all = workReportTempRepository.findAllByReportId(entry.getId());
 
         Map<String, String> map = new HashMap<>();
-        List<IdName> list1 = new ArrayList<>();
+        List<IdNamePojo> list1 = new ArrayList<>();
 
         for (WorkReportToEntry toEntry : all) {
             map.put(toEntry.getTargetId(), toEntry.getTargetName());
-            list1.add(new IdName(toEntry.getTargetId(), toEntry.getTargetName()));
+            list1.add(new IdNamePojo(toEntry.getTargetId(), toEntry.getTargetName()));
         }
 
         voWorkReport.setReportTo(map);

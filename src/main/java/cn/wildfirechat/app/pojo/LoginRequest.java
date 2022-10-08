@@ -21,6 +21,14 @@ public class LoginRequest {
      */
     private String appVersion;
 
+    // 微信Id
+    private String wechat_unionid;
+    // qqid
+    private String qq_openid;
+
+    private String displayName;//昵称
+    private String portrait;//头像
+
     public String getClientId() {
         return clientId;
     }
@@ -75,5 +83,37 @@ public class LoginRequest {
 
     public void setAppVersion(String appVersion) {
         this.appVersion = appVersion;
+    }
+
+    public String getWechat_unionid() {
+        return wechat_unionid;
+    }
+
+    public void setWechat_unionid(String wechat_unionid) {
+        this.wechat_unionid = wechat_unionid;
+    }
+
+    public String getQq_openid() {
+        return qq_openid;
+    }
+
+    public void setQq_openid(String qq_openid) {
+        this.qq_openid = qq_openid;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getPortrait() {
+        return portrait;
+    }
+
+    public void setPortrait(String portrait) {
+        this.portrait = portrait;
     }
 }

@@ -8,6 +8,6 @@ import org.springframework.stereotype.Repository;
 public interface UserLogRepository extends JpaRepositoryImplementation<UserLogEntry, Long> {
 
 
-    UserPwdEntry findByUserId(String userId);
+    UserEntity findByUserId(String userId);
 
 }

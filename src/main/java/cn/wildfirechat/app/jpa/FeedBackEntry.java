@@ -20,7 +20,7 @@ public class FeedBackEntry {
     public Long id;
 
     @Column(name = "user_id")
-    public String user_id;
+    public String userId;
 
     @Column(name = "content")
     public String content;

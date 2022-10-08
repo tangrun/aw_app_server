@@ -1,8 +1,8 @@
 package cn.wildfirechat.app;
 
 import cn.wildfirechat.app.admin.AdminService;
-import cn.wildfirechat.app.jpa.UserPwdEntry;
-import cn.wildfirechat.app.jpa.UserPwdRepository;
+import cn.wildfirechat.app.jpa.UserEntity;
+import cn.wildfirechat.app.jpa.UserEntityRepository;
 import cn.wildfirechat.pojos.InputOutputUserInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
@@ -28,7 +28,7 @@ public class MaintainController {
     AdminService adminService;
 
     @Autowired
-    UserPwdRepository userPwdRepository;
+    UserEntityRepository userRepository;
 
     /**
      * 用户密码表 userid为空的
@@ -37,9 +37,9 @@ public class MaintainController {
      */
     @GetMapping("user_pwd_userid_22_02_18")
     public String user_pwd_userid_22_02_18() {
-        List<UserPwdEntry> all = userPwdRepository.findAll(new Specification<UserPwdEntry>() {
+        List<UserEntity> all = userRepository.findAll(new Specification<UserEntity>() {
             @Override
-            public Predicate toPredicate(Root<UserPwdEntry> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
+            public Predicate toPredicate(Root<UserEntity> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
                 Predicate predicate = criteriaBuilder.conjunction();
                 predicate.getExpressions().add(
                         criteriaBuilder.and(criteriaBuilder.isNull(root.get("userId")), criteriaBuilder.isNotNull(root.get("mobile")))
@@ -48,7 +48,7 @@ public class MaintainController {
                 return predicate;
             }
         });
-        List<UserPwdEntry> collect = all.stream().map(userPwdEntry -> {
+        List<UserEntity> collect = all.stream().map(userPwdEntry -> {
             InputOutputUserInfo user = adminService.getUserByMobile(userPwdEntry.getMobile());
             if (user != null) {
                 userPwdEntry.setUserId(user.getUserId());
@@ -58,7 +58,7 @@ public class MaintainController {
         }).filter(userPwdEntry -> {
             return userPwdEntry != null;
         }).collect(Collectors.toList());
-        userPwdRepository.saveAll(collect);
+        userRepository.saveAll(collect);
         return "ok";
     }
 
@@ -70,9 +70,9 @@ public class MaintainController {
     @GetMapping("mobile22_02_09")
     public String mobile22_02_09() {
 
-        List<UserPwdEntry> all = userPwdRepository.findAll(new Specification<UserPwdEntry>() {
+        List<UserEntity> all = userRepository.findAll(new Specification<UserEntity>() {
             @Override
-            public Predicate toPredicate(Root<UserPwdEntry> root, CriteriaQuery<?> criteriaQuery, CriteriaBuilder criteriaBuilder) {
+            public Predicate toPredicate(Root<UserEntity> root, CriteriaQuery<?> criteriaQuery, CriteriaBuilder criteriaBuilder) {
                 Predicate predicate = criteriaBuilder.conjunction();
                 predicate.getExpressions().add(
                         criteriaBuilder.or(criteriaBuilder.isNull(root.get("mobile")), criteriaBuilder.equal(root.get("mobile"), ""))
@@ -81,11 +81,11 @@ public class MaintainController {
                 return predicate;
             }
         });
-        for (UserPwdEntry entry : all) {
+        for (UserEntity entry : all) {
             InputOutputUserInfo user = adminService.getUserById(entry.getUserId());
             entry.setMobile(user.getMobile());
         }
-        userPwdRepository.saveAll(all);
+        userRepository.saveAll(all);
 
         return "ok";
     }

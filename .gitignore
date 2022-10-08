@@ -7,3 +7,5 @@ appdata.trace.db
 .svn
 audio_cache
 wildfire_upload_tmp
+doc/
+logs/

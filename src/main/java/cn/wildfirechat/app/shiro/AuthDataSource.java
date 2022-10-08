@@ -31,42 +31,46 @@ public class AuthDataSource {
     private RecordRepository recordRepository;
 
     @Autowired
-    private UserPwdRepository userPwdRepository;
+    private UserEntityRepository userRepository;
 
-    public RestResult.RestCode insertRecord(String mobile, String code) {
+    public RestResult<Void> insertRecord(String mobile, String code) {
         if (!Utils.isMobile(mobile)) {
             LOG.error("Not valid mobile {}", mobile);
-            return RestResult.RestCode.ERROR_INVALID_MOBILE;
+            return RestResult.error(RestResult.RestCode.ERROR_INVALID_MOBILE);
         }
 
-        Record record = recordRepository.findById(mobile).orElseGet(() -> new Record(code, mobile));
-
-        if (System.currentTimeMillis() - record.getTimestamp() < 60 * 1000) {
-            LOG.error("Send code over frequency. timestamp {}, now {}", record.getTimestamp(), System.currentTimeMillis());
-            return RestResult.RestCode.ERROR_SEND_SMS_OVER_FREQUENCY;
+        Optional<Record> optional = recordRepository.findById(mobile);
+        Record record;
+        if (optional.isPresent()){
+            record = optional.get();
+            if (System.currentTimeMillis() - record.getTimestamp() < 15 * 60 * 1000) {
+                LOG.error("Send code over frequency. timestamp {}, now {}", record.getTimestamp(), System.currentTimeMillis());
+                RestResult<Void> result = RestResult.error(ERROR_SEND_SMS_OVER_FREQUENCY);
+                return result.setMessage("验证码15分钟内有效，请勿重复获取");
+            }
         }
-
+        record = new Record(code,mobile );
         if (!record.increaseAndCheck()) {
             LOG.error("Count check failure, already send {} messages today", record.getRequestCount());
             RestResult.RestCode c = RestResult.RestCode.ERROR_SEND_SMS_OVER_FREQUENCY;
             c.msg = "发送给用户 " + mobile + " 超出频率限制";
-            return c;
+            return RestResult.error(RestResult.RestCode.ERROR_SEND_SMS_OVER_FREQUENCY);
         }
 
         record.setCode(code);
         record.setTimestamp(System.currentTimeMillis());
         recordRepository.save(record);
-        return RestResult.RestCode.SUCCESS;
+        return RestResult.ok();
     }
 
     public void clearRecode(String mobile) {
         recordRepository.deleteById(mobile);
     }
 
-    public RestResult.RestCode verifyPassword(String username, String password) {
+    public RestResult.RestCode verifyPassword(String mobile, String password) {
         //判断用户是否已经设置密码
-        UserPwdEntry userPwdEntry = userPwdRepository.findByMobile(username);
-        if(userPwdEntry != null && userPwdEntry.passwd.equals(DigestUtils.md5DigestAsHex(password.getBytes()))){
+        UserEntity userEntity = userRepository.findFirstByMobile(mobile);
+        if(userEntity != null && userEntity.passwd.equals(DigestUtils.md5DigestAsHex(password.getBytes()))){
             // 密码不正确时
             return RestResult.RestCode.SUCCESS;
         }

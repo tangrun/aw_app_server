@@ -9,14 +9,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
 
 public interface Service {
-    RestResult sendCode(String mobile);
-    RestResult login(HttpServletResponse response, String mobile, String code, String clientId, int platform);
-
-    RestResult loginByPwd(HttpServletResponse response, LoginRequest request);
-    RestResult setPassword(HttpServletResponse response, ChangePasswordRequest request);
-    RestResult changePassword(HttpServletResponse response, ChangePasswordRequest request);
-    RestResult forgetPassword(HttpServletResponse response, ChangePasswordRequest request);
-
     RestResult createPcSession(CreateSessionRequest request);
     RestResult loginWithSession(String token);
 
