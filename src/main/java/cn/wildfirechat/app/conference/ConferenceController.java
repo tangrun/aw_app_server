@@ -2,6 +2,7 @@ package cn.wildfirechat.app.conference;
 
 import cn.wildfirechat.app.pojo.ConferenceInfo;
 import cn.wildfirechat.app.pojo.ConferenceInfoRequest;
+import cn.wildfirechat.app.pojo.RecordingRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,12 @@ public class ConferenceController {
     @PostMapping(value = "/conference/destroy/{conferenceId}")
     public Object destroyConference(@PathVariable("conferenceId") String conferenceId) throws IOException {
         return mService.destroyConference(conferenceId);
+    }
+
+    @CrossOrigin
+    @PostMapping(value = "/conference/recording/{conferenceId}")
+    public Object recordingConference(@PathVariable("conferenceId") String conferenceId, @RequestBody RecordingRequest recordingRequest) throws IOException {
+        return mService.recordingConference(conferenceId, recordingRequest.recording);
     }
 
     @CrossOrigin

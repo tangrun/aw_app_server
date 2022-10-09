@@ -2,9 +2,9 @@ package cn.wildfirechat.app;
 
 
 import cn.wildfirechat.app.admin.AdminService;
-import cn.wildfirechat.app.jpa.*;
-import cn.wildfirechat.app.pojo.*;
+import cn.wildfirechat.app.jpa.*;import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.shiro.AuthDataSource;
+import cn.wildfirechat.app.shiro.PhoneCodeToken;
 import cn.wildfirechat.app.shiro.TokenAuthenticationToken;
 import cn.wildfirechat.app.shiro.UsernameCodeToken;
 import cn.wildfirechat.app.shiro.UsernamePasswordToken;
@@ -20,6 +20,12 @@ import cn.wildfirechat.sdk.model.IMResult;
 import com.aliyun.oss.*;
 import com.aliyun.oss.model.PutObjectRequest;
 import com.google.gson.Gson;
+import com.qcloud.cos.COSClient;
+import com.qcloud.cos.ClientConfig;
+import com.qcloud.cos.auth.BasicCOSCredentials;
+import com.qcloud.cos.auth.COSCredentials;
+import com.qcloud.cos.exception.CosClientException;
+import com.qcloud.cos.http.HttpProtocol;
 import com.google.gson.JsonObject;
 import com.qiniu.common.QiniuException;
 import com.qiniu.http.Response;
@@ -35,6 +41,7 @@ import io.minio.errors.MinioException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.*;
+import org.apache.shiro.crypto.hash.Sha1Hash;
 import org.apache.shiro.subject.Subject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,11 +60,15 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import static cn.wildfirechat.app.RestResult.RestCode.*;
 import static cn.wildfirechat.app.jpa.PCSession.PCSessionStatus.*;
@@ -723,6 +734,38 @@ public class ServiceImpl implements Service {
                 e.printStackTrace();
                 return RestResult.error(ERROR_SERVER_ERROR);
             }
+        } else if(ossType == 4) {
+            //Todo 需要把文件上传到文件服务器。
+        } else if(ossType == 5) {
+            COSCredentials cred = new BasicCOSCredentials(ossAccessKey, ossSecretKey);
+            ClientConfig clientConfig = new ClientConfig();
+            String [] ss = ossUrl.split("\\.");
+            if(ss.length > 3) {
+                if(!ss[1].equals("accelerate")) {
+                    clientConfig.setRegion(new com.qcloud.cos.region.Region(ss[1]));
+                } else {
+                    clientConfig.setRegion(new com.qcloud.cos.region.Region("ap-shanghai"));
+                    try {
+                        URL u = new URL(ossUrl);
+                        clientConfig.setEndPointSuffix(u.getHost());
+                    } catch (MalformedURLException e) {
+                        e.printStackTrace();
+                        return RestResult.error(ERROR_SERVER_ERROR);
+                    }
+                }
+            }
+
+            clientConfig.setHttpProtocol(HttpProtocol.https);
+            COSClient cosClient = new COSClient(cred, clientConfig);
+
+            try {
+                cosClient.putObject(bucket, fileName, localFile.getAbsoluteFile());
+            } catch (CosClientException e) {
+                e.printStackTrace();
+                return RestResult.error(ERROR_SERVER_ERROR);
+            } finally {
+                cosClient.shutdown();
+            }
         }
         UploadFileResponse response = new UploadFileResponse();
         response.url = url;
@@ -797,6 +840,46 @@ public class ServiceImpl implements Service {
                         MinioClient minioClient = new MinioClient(ossUrl, ossAccessKey, ossSecretKey);
                         minioClient.copyObject(ossFavoriteBucket, toKey, null, null, bucket, objectName, null, null);
                         request.url = ossFavoriteBucketDomain + "/" + toKey;
+                    } else if(ossType == 4) {
+                        //Todo 需要把收藏的文件保存为永久存储。
+                    } else if(ossType == 5) {
+                        COSCredentials cred = new BasicCOSCredentials(ossAccessKey, ossSecretKey);
+                        ClientConfig clientConfig = new ClientConfig();
+                        String [] ss = ossUrl.split("\\.");
+                        if(ss.length > 3) {
+                            if(!ss[1].equals("accelerate")) {
+                                clientConfig.setRegion(new com.qcloud.cos.region.Region(ss[1]));
+                            } else {
+                                clientConfig.setRegion(new com.qcloud.cos.region.Region("ap-shanghai"));
+                                try {
+                                    URL u = new URL(ossUrl);
+                                    clientConfig.setEndPointSuffix(u.getHost());
+                                } catch (MalformedURLException e) {
+                                    e.printStackTrace();
+                                    return RestResult.error(ERROR_SERVER_ERROR);
+                                }
+                            }
+                        }
+
+                        clientConfig.setHttpProtocol(HttpProtocol.https);
+                        COSClient cosClient = new COSClient(cred, clientConfig);
+
+                        path = path.substring(1);
+                        String objectName = path;
+                        String toKey = path;
+                        if (!toKey.startsWith(userId)) {
+                            toKey = userId + "-" + toKey;
+                        }
+
+                        try {
+                            cosClient.copyObject(bucket, objectName, ossFavoriteBucket, toKey);
+                            request.url = ossFavoriteBucketDomain + "/" + toKey;
+                        } catch (CosClientException e) {
+                            e.printStackTrace();
+                            return RestResult.error(ERROR_SERVER_ERROR);
+                        } finally {
+                            cosClient.shutdown();
+                        }
                     }
                 }
             } catch (Exception e) {
