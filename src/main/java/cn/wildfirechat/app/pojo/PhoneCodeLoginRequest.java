@@ -1,6 +1,6 @@
 package cn.wildfirechat.app.pojo;
 
-public class LoginRequest {
+public class PhoneCodeLoginRequest {
     private String mobile;
     private String code;
     private String clientId;

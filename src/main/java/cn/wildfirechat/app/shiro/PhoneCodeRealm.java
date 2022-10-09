@@ -13,11 +13,18 @@ import org.apache.shiro.subject.PrincipalCollection;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
+
 @Service
 public class PhoneCodeRealm extends AuthorizingRealm {
 
     @Autowired
     AuthDataSource authDataSource;
+
+    @PostConstruct
+    void initRealm() {
+        setAuthenticationTokenClass(PhoneCodeToken.class);
+    }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
@@ -30,15 +37,10 @@ public class PhoneCodeRealm extends AuthorizingRealm {
     }
 
     @Override
-    public boolean supports(AuthenticationToken token) {
-        return token instanceof UsernameCodeToken;
-    }
-
-    @Override
-    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken token) throws AuthenticationException {
-        if (token instanceof UsernameCodeToken){
-            String mobile = ((UsernameCodeToken) token).getUsername();
-            String code = new String(((UsernameCodeToken) token).getPassword());
+    protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authenticationToken) throws AuthenticationException {
+        if (authenticationToken instanceof PhoneCodeToken) {
+            String mobile = (String) authenticationToken.getPrincipal();
+            String code = (String)authenticationToken.getCredentials();
             RestResult.RestCode restCode = authDataSource.verifyCode(mobile, code);
             if (restCode == RestResult.RestCode.SUCCESS) {
                 return new SimpleAuthenticationInfo(mobile, code.getBytes(), getName());

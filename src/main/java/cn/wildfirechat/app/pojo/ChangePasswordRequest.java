@@ -5,7 +5,7 @@ import lombok.Data;
 import javax.validation.constraints.NotBlank;
 
 /**
- * ä¿®æ”¹å¯†ç ã€è®¾ç½®å¯†ç ç›¸å…³
+ * ĞŞ¸ÄÃÜÂë¡¢ÉèÖÃÃÜÂëÏà¹Ø
  */
 @Data
 public class ChangePasswordRequest {

@@ -11,6 +11,7 @@ import cn.wildfirechat.app.tools.Invoker;
 import cn.wildfirechat.app.tools.Utils;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.pojos.InputCreateDevice;
+import cn.wildfirechat.pojos.UserOnlineStatus;
 import cn.wildfirechat.pojos.InputOutputUserInfo;
 import cn.wildfirechat.sdk.UserAdmin;
 import cn.wildfirechat.sdk.model.IMResult;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.util.Assert;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -162,32 +164,25 @@ public class AppController {
      */
     @PostMapping(value = "/send_code", produces = "application/json;charset=UTF-8")
     public Object sendCode(@RequestBody SendCodeRequest request) {
-        return userService.sendCode(request.getMobile());
+        return mService.sendCode(request.getMobile());
+    public Object sendLoginCode(@RequestBody SendCodeRequest request) {
+        return mService.sendLoginCode(request.getMobile());
     }
 
-    /**
-     * 验证码登录
-     *
-     * @param request
-     * @param response
-     * @return
-     */
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
     public Object login(@RequestBody LoginRequest request, HttpServletResponse response) {
-        return userService.loginBySMSCode(response, request);
+        return mService.login(response, request.getMobile(), request.getCode(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
+    public Object loginWithMobileCode(@RequestBody LoginRequest request, HttpServletResponse response) {
+        return userService.loginWithMobileCode(response, request);
     }
 
-    /**
-     * 密码登录
-     *
-     * @param request
-     * @param response
-     * @return
-     */
+
+
+
     @PostMapping(value = "/api/login", produces = "application/json;charset=UTF-8")
-    public Object loginByPwd(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginWithPassword(@RequestBody LoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
-        return userService.loginByPwd(response, request);
+        return userService.loginWithPassword(response, request);
     }
 
     /**
@@ -257,8 +252,7 @@ public class AppController {
         return userService.forgetPassword(request.getMobile(), request.getCode(), request.getNewPwd());
     }
 
-    /*
-    PC扫码操作
+    /* PC扫码操作
     1, PC -> App     创建会话
     2, PC -> App     轮询调用session_login进行登陆，如果已经扫码确认返回token，否则返回错误码9（已经扫码还没确认)或者10(还没有被扫码)
      */
@@ -285,12 +279,12 @@ public class AppController {
                         deferredResult.setResult(new ResponseEntity(restResult, HttpStatus.OK));
                         break;
                     } else if (restResult.getCode() == RestResult.RestCode.SUCCESS.code
-                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
-                            || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
-                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
-                            || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
-                        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
-                        if (restResult.getCode() == RestResult.RestCode.SUCCESS.code) {
+                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
+                        || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
+                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
+                        || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
+                        ResponseEntity.BodyBuilder builder =ResponseEntity.ok();
+                        if(restResult.getCode() == RestResult.RestCode.SUCCESS.code){{
                             Subject subject = SecurityUtils.getSubject();
                             Object sessionId = subject.getSession().getId();
                             builder.header("authToken", sessionId.toString());
@@ -300,7 +294,7 @@ public class AppController {
                     } else {
                         TimeUnit.SECONDS.sleep(1);
                     }
-                    i++;
+                    i ++;
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();
@@ -310,8 +304,7 @@ public class AppController {
         return deferredResult;
     }
 
-    /*
-    手机扫码操作
+    /* 手机扫码操作
     1，扫码，调用/scan_pc接口。
     2，调用/confirm_pc 接口进行确认
      */
@@ -324,7 +317,6 @@ public class AppController {
     public Object confirmPc(@RequestBody ConfirmSessionRequest request) {
         return mService.confirmPc(request);
     }
-
     @PostMapping(value = "/cancel_pc", produces = "application/json;charset=UTF-8")
     public Object cancelPc(@RequestBody CancelSessionRequest request) {
         return mService.cancelPc(request);
@@ -394,7 +386,7 @@ public class AppController {
     }
 
     /*
-    消息相关
+    发送消息
      */
     @PostMapping(value = "/messages/send")
     public Object sendMessage(@RequestBody SendMessageRequest sendMessageRequest) {
@@ -435,6 +427,7 @@ public class AppController {
      */
     @PostMapping(value = "/media/upload/{media_type}")
     public Object uploadMedia(@RequestParam("file") MultipartFile file, @PathVariable("media_type") int mediaType) throws IOException {
+        return mService.uploadMedia(mediaType, file);
         Subject subject = SecurityUtils.getSubject();
         String userId = (String) subject.getSession().getAttribute("userId");
 

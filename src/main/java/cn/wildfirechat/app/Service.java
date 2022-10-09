@@ -9,6 +9,19 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
 
 public interface Service {
+    RestResult sendCode(String mobile);
+    RestResult login(HttpServletResponse response, String mobile, String code, String clientId, int platform);
+
+
+
+
+
+
+
+
+
+
+
     RestResult createPcSession(CreateSessionRequest request);
     RestResult loginWithSession(String token);
 

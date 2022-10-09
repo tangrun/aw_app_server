@@ -23,6 +23,15 @@ import java.util.Map;
 @Configuration
 public class ShiroConfig {
 
+    @Autowired
+    private PhoneCodeRealm phoneCodeRealm;
+
+    @Autowired
+    private ScanCodeRealm scanCodeRealm;
+
+    @Autowired
+    private UserPasswordRealm userPasswordRealm;
+
     @Value("${wfc.all_client_support_ssl}")
     private boolean All_Client_Support_SSL;
 
@@ -68,6 +77,9 @@ public class ShiroConfig {
         filterChainDefinitionMap.put("/pc_session", "anon");
         filterChainDefinitionMap.put("/amr2mp3", "anon");
 
+        filterChainDefinitionMap.put("/login_pwd", "anon");
+        filterChainDefinitionMap.put("/send_reset_code", "anon");
+        filterChainDefinitionMap.put("/reset_pwd", "anon");
         filterChainDefinitionMap.put("/session_login/**", "anon");
         filterChainDefinitionMap.put("/user/online_event", "anon");
         filterChainDefinitionMap.put("/logs/**", "anon");
@@ -123,6 +135,4 @@ public class ShiroConfig {
         SecurityUtils.setSecurityManager(defaultSecurityManager);
         return defaultSecurityManager;
     }
-
-
 }
