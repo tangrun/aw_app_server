@@ -39,12 +39,6 @@ public class ShiroConfig {
     private SessionDAO sessionDAO;
 
     @Autowired
-    private PhoneCodeRealm phoneCodeRealm;
-
-    @Autowired
-    private ScanCodeRealm scanCodeRealm;
-
-    @Autowired
     private PasswordRealm passwordRealm;
 
 //    @Bean

@@ -10,13 +10,14 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
 
+@RequestMapping("common")
 @RestController
 public class CommonController {
 
     @Resource
     CommonService commonService;
 
-    @PostMapping("/common/file/upload")
+    @PostMapping("file/upload")
     public RestResult<UploadFileResponse> uploadFile(@SessionAttribute String userId,@RequestParam("file") MultipartFile file ){
         Assert.notNull(file, "字段file为空");
         UploadFile uploadFile = commonService.uploadFile(userId, file);
@@ -25,7 +26,7 @@ public class CommonController {
         return RestResult.ok(response);
     }
 
-    @PostMapping("/common/file/upload2")
+    @PostMapping("file/upload2")
     public RestResult<UploadFileResponse> uploadFile2(@SessionAttribute String userId, @RequestParam("file") MultipartFile file ){
         Assert.notNull(file, "字段file为空");
         UploadFile uploadFile = commonService.uploadFile(userId, file);
@@ -34,7 +35,7 @@ public class CommonController {
         return RestResult.ok(response);
     }
 
-    @GetMapping("/common/file/{id}")
+    @GetMapping("file/{id}")
     public void downloadFile(@PathVariable("id") String id, HttpServletResponse response){
         if (id.contains(".")){
             id = id.substring(0,id.indexOf("."));

@@ -1,7 +1,5 @@
 package cn.wildfirechat.app;
 
-public class RestResult {
-    public enum  RestCode {
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.sdk.model.IMResult;
 
@@ -24,7 +22,6 @@ public class RestResult<T> {
         ERROR_INVALID_PARAMETER(15, "无效参数"),
         ERROR_NOT_EXIST(16, "对象不存在"),
         ERROR_USER_NAME_ALREADY_EXIST(17, "用户名已经存在"),
-        ERROR_SESSION_CANCELED(18, "会话已经取消");
         ERROR_SESSION_CANCELED(18, "会话已经取消"),
         ERROR_FILE_DOWNLOAD_ERROR(19, "文件下载失败"),
         ERROR_USER_NOT_EXIST(20, "账号不存在，请先注册"),
@@ -47,33 +44,20 @@ public class RestResult<T> {
 
     private int code;
     private String message;
-    private Object result;
     private T result;
 
-    public static RestResult ok(Object object) {
-        return new RestResult(RestCode.SUCCESS, object);
     public boolean isSuccess(){
         return code == RestCode.SUCCESS.code;
-
-
-
-
     }
 
-    public static RestResult error(RestCode code) {
-        return new RestResult(code, null);
     public static <T>  RestResult<T> ok() {
         return ok(null);
     }
 
-    public static RestResult result(RestCode code, Object object){
-        return new RestResult(code, object);
     public static <T>  RestResult<T> ok(T object) {
         return new RestResult<T>(RestCode.SUCCESS, object);
     }
 
-    public static RestResult result(int code, String message, Object object){
-        RestResult r = new RestResult(RestCode.SUCCESS, object);
     public static <T>  RestResult<T> error(String msg) {
         return new RestResult<T>(RestCode.ERROR_REQUEST_ERROR, null).setMessage(msg);
     }
@@ -93,7 +77,6 @@ public class RestResult<T> {
         return r;
     }
 
-    private RestResult(RestCode code, Object result) {
     public static <T> RestResult<T> result(IMResult<?> imResult) {
         return result(imResult, null);
     }
@@ -121,18 +104,15 @@ public class RestResult<T> {
         return message;
     }
 
-    public void setMessage(String message) {
     public RestResult<T> setMessage(String message) {
         this.message = message;
         return this;
     }
 
-    public Object getResult() {
     public T getResult() {
         return result;
     }
 
-    public void setResult(Object result) {
     public RestResult<T> setResult(T result) {
         this.result = result;
         return this;

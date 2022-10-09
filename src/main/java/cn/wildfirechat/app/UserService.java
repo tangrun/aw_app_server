@@ -2,9 +2,9 @@ package cn.wildfirechat.app;
 
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.jpa.*;
-import cn.wildfirechat.app.pojo.LoginRequest;
 import cn.wildfirechat.app.pojo.LoginResponse;
 import cn.wildfirechat.app.pojo.OtherAccountResponse;
+import cn.wildfirechat.app.pojo.PhoneCodeLoginRequest;
 import cn.wildfirechat.app.shiro.AuthDataSource;
 import cn.wildfirechat.app.shiro.UsernameCodeToken;
 import cn.wildfirechat.app.shiro.UsernamePasswordToken;
@@ -141,7 +141,7 @@ public class UserService {
     /**
      * 验证码登录
      */
-    public RestResult<LoginResponse> loginBySMSCode(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginBySMSCode(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         String mobile = request.getMobile();
         String code = request.getCode();
         String clientId = request.getClientId();
@@ -351,7 +351,7 @@ public class UserService {
      * @param request
      * @return
      */
-    public RestResult<LoginResponse> loginByPwd(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginByPwd(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         if (!rateLimiter.isGranted("lp_" + request.getMobile())) {
             return RestResult.error(ERROR_REQUEST_OVER_FREQUENCY);
         }
@@ -450,7 +450,7 @@ public class UserService {
      * @param request
      * @return
      */
-    public RestResult<LoginResponse> loginByOther(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginByOther(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         try {
             UserEntity userEntity = null;
             if (StringUtils.isNotBlank(request.getQq_openid())) {

@@ -3,28 +3,24 @@ package cn.wildfirechat.app;
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.common.CommonService;
 import cn.wildfirechat.app.common.consts.SessionAttributes;
-import cn.wildfirechat.app.common.entity.UploadFile;
 import cn.wildfirechat.app.jpa.FavoriteItem;
-import cn.wildfirechat.app.jpa.UserEntity;
 import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.tools.Invoker;
 import cn.wildfirechat.app.tools.Utils;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.pojos.InputCreateDevice;
-import cn.wildfirechat.pojos.UserOnlineStatus;
 import cn.wildfirechat.pojos.InputOutputUserInfo;
 import cn.wildfirechat.sdk.UserAdmin;
 import cn.wildfirechat.sdk.model.IMResult;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.subject.Subject;
-import org.h2.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.util.Assert;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -52,11 +48,6 @@ public class AppController {
     @Autowired
     private UserService userService;
 
-    @Value("${call.server.host}")
-    private String callServerHost;
-
-    @Value("${call.server.port}")
-    private Integer callServerPort;
 
     @GetMapping()
     public Object health() {
@@ -65,9 +56,7 @@ public class AppController {
 
     @PostMapping(value = "/call/serverInfo")
     public RestResult<CallServerInfoResp> serverInfo() {
-        return RestResult.ok(new CallServerInfoResp()
-                .setServerHost(callServerHost)
-                .setServerPort(callServerPort));
+        return RestResult.error("不支持，请升级最新版本");
     }
 
     //region 拓展字段相关设置接口
@@ -80,7 +69,7 @@ public class AppController {
      */
     @PostMapping(value = "/extra/friend/disableScreenshot")
     public RestResult disableScreenshot(@RequestBody ExtraDisableRequest request) {
-        Assert.isTrue(!org.apache.commons.lang3.StringUtils.isBlank(request.getTargetId()), "targetId不能为空");
+        Assert.isTrue(!StringUtils.isBlank(request.getTargetId()), "targetId不能为空");
         Boolean disable = Utils.integer2boolean(request.getDisable());
         Assert.notNull(disable, "状态不能为空");
 
@@ -142,7 +131,7 @@ public class AppController {
      */
     @PostMapping(value = "/extra/friend/enableLeaveChatClearList")
     public RestResult enableLeaveChatClearList(@RequestBody ExtraDisableRequest request) {
-        Assert.isTrue(!org.apache.commons.lang3.StringUtils.isBlank(request.getTargetId()), "targetId不能为空");
+        Assert.isTrue(!StringUtils.isBlank(request.getTargetId()), "targetId不能为空");
         Boolean disable = Utils.integer2boolean(request.getDisable());
         Assert.notNull(disable, "状态不能为空");
 
@@ -163,26 +152,20 @@ public class AppController {
     移动端登录
      */
     @PostMapping(value = "/send_code", produces = "application/json;charset=UTF-8")
-    public Object sendCode(@RequestBody SendCodeRequest request) {
-        return mService.sendCode(request.getMobile());
     public Object sendLoginCode(@RequestBody SendCodeRequest request) {
-        return mService.sendLoginCode(request.getMobile());
+        return userService.sendCode(request.getMobile());
     }
 
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
-    public Object login(@RequestBody LoginRequest request, HttpServletResponse response) {
-        return mService.login(response, request.getMobile(), request.getCode(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
-    public Object loginWithMobileCode(@RequestBody LoginRequest request, HttpServletResponse response) {
-        return userService.loginWithMobileCode(response, request);
+    public Object loginWithMobileCode(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
+       return userService.loginBySMSCode(response, request);
     }
 
 
-
-
     @PostMapping(value = "/api/login", produces = "application/json;charset=UTF-8")
-    public Object loginWithPassword(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginWithPassword(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
-        return userService.loginWithPassword(response, request);
+        return userService.loginByPwd(response, request);
     }
 
     /**
@@ -193,7 +176,7 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/api/otherLogin", produces = "application/json;charset=UTF-8")
-    public Object loginOther(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginOther(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
         return userService.loginByOther(response, request);
     }
@@ -205,7 +188,7 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/api/bindOtherAccount", produces = "application/json;charset=UTF-8")
-    public RestResult<Void> setBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId, @RequestBody LoginRequest request) {
+    public RestResult<Void> setBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId, @RequestBody PhoneCodeLoginRequest request) {
         return userService.setBindOtherAccount(userId, request.getPlatform(),request.getCode());
     }
 
@@ -279,24 +262,26 @@ public class AppController {
                         deferredResult.setResult(new ResponseEntity(restResult, HttpStatus.OK));
                         break;
                     } else if (restResult.getCode() == RestResult.RestCode.SUCCESS.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
-                        || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
-                        ResponseEntity.BodyBuilder builder =ResponseEntity.ok();
-                        if(restResult.getCode() == RestResult.RestCode.SUCCESS.code){{
-                            Subject subject = SecurityUtils.getSubject();
-                            Object sessionId = subject.getSession().getId();
-                            builder.header("authToken", sessionId.toString());
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
+                            || restResult.getCode() == RestResult.RestCode.ERROR_CODE_INCORRECT.code) {
+                        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+                        if (restResult.getCode() == RestResult.RestCode.SUCCESS.code) {
+                            {
+                                Subject subject = SecurityUtils.getSubject();
+                                Object sessionId = subject.getSession().getId();
+                                builder.header("authToken", sessionId.toString());
+                            }
+                            deferredResult.setResult(builder.body(restResult));
+                            break;
+                        } else {
+                            TimeUnit.SECONDS.sleep(1);
                         }
-                        deferredResult.setResult(builder.body(restResult));
-                        break;
-                    } else {
-                        TimeUnit.SECONDS.sleep(1);
+                        i++;
                     }
-                    i ++;
                 }
-            } catch (Exception ex) {
+            }catch(Exception ex){
                 ex.printStackTrace();
                 deferredResult.setResult(new ResponseEntity(RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR), HttpStatus.OK));
             }
@@ -328,7 +313,7 @@ public class AppController {
     @CrossOrigin
     @PostMapping(value = "/change_name", produces = "application/json;charset=UTF-8")
     public Object changeName(@RequestBody ChangeNameRequest request) {
-        if (StringUtils.isNullOrEmpty(request.getNewName())) {
+        if (StringUtils.isBlank(request.getNewName())) {
             return RestResult.error(RestResult.RestCode.ERROR_INVALID_PARAMETER);
         }
         return mService.changeName(request.getNewName());
@@ -354,7 +339,8 @@ public class AppController {
     客户端上传协议栈日志
      */
     @PostMapping(value = "/logs/{userId}/upload")
-    public Object uploadFiles(@RequestParam("file") MultipartFile file, @PathVariable("userId") String userId) throws IOException {
+    public Object uploadFiles(@RequestParam("file") MultipartFile file, @PathVariable("userId") String userId) throws
+        IOException {
         return mService.saveUserLogs(userId, file);
     }
 
@@ -426,15 +412,8 @@ public class AppController {
     iOS设备Share extension分享图片文件等使用
      */
     @PostMapping(value = "/media/upload/{media_type}")
-    public Object uploadMedia(@RequestParam("file") MultipartFile file, @PathVariable("media_type") int mediaType) throws IOException {
+    public Object uploadMedia(@SessionAttribute(SessionAttributes.userId) String userId, @RequestParam("file") MultipartFile file, @PathVariable("media_type") int mediaType) throws IOException {
         return mService.uploadMedia(mediaType, file);
-        Subject subject = SecurityUtils.getSubject();
-        String userId = (String) subject.getSession().getAttribute("userId");
-
-        UploadFile uploadFile = commonService.uploadFile(userId, file);
-        UploadFileResponse response = new UploadFileResponse();
-        response.url = commonService.getDownloadPath(uploadFile);
-        return RestResult.ok(response);
     }
 
     @CrossOrigin
