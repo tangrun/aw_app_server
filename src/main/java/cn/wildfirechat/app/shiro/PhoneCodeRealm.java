@@ -13,11 +13,18 @@ import org.apache.shiro.subject.PrincipalCollection;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
+
 @Service
 public class PhoneCodeRealm extends AuthorizingRealm {
 
     @Autowired
     AuthDataSource authDataSource;
+
+    @PostConstruct
+    void initRealm() {
+        setAuthenticationTokenClass(PhoneCodeToken.class);
+    }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principalCollection) {
@@ -29,7 +36,7 @@ public class PhoneCodeRealm extends AuthorizingRealm {
         return info;
     }
 
-    @Override
+
     public boolean supports(AuthenticationToken token) {
         return token instanceof UsernameCodeToken;
     }
@@ -44,6 +51,7 @@ public class PhoneCodeRealm extends AuthorizingRealm {
                 return new SimpleAuthenticationInfo(mobile, code.getBytes(), getName());
             }
         }
+
         throw new AuthenticationException("没发送验证码或者验证码过期");
     }
 }

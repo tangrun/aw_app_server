@@ -161,7 +161,7 @@ public class AppController {
     移动端登录
      */
     @PostMapping(value = "/send_code", produces = "application/json;charset=UTF-8")
-    public Object sendCode(@RequestBody SendCodeRequest request) {
+    public Object sendLoginCode(@RequestBody SendCodeRequest request) {
         return userService.sendCode(request.getMobile());
     }
 
@@ -173,11 +173,45 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
-    public Object login(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginWithMobileCode(@RequestBody LoginRequest request, HttpServletResponse response) {
         return userService.loginBySMSCode(response, request);
     }
 
-    /**
+    @PostMapping(value = "/login_pwd", produces = "application/json;charset=UTF-8")
+    public Object loginWithPassword(@RequestBody UserPasswordLoginRequest request, HttpServletResponse response) {
+        return mService.loginWithPassword(response, request.getMobile(), request.getPassword(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
+    }    
+
+@PostMapping(value = "/change_pwd", produces = "application/json;charset=UTF-8")
+    public Object changePassword(@RequestBody ChangePasswordRequest request) {
+        return mService.changePassword(request.getOldPassword(), request.getNewPassword());
+    }
+
+    @PostMapping(value = "/send_reset_code", produces = "application/json;charset=UTF-8")
+    public Object sendResetCode(@RequestBody SendCodeRequest request) {
+        return mService.sendResetCode(request.getMobile());
+    }
+
+    @PostMapping(value = "/reset_pwd", produces = "application/json;charset=UTF-8")
+    public Object resetPassword(@RequestBody ResetPasswordRequest request) {
+        return mService.resetPassword(request.getMobile(), request.getResetCode(), request.getNewPassword());
+    }
+
+    @PostMapping(value = "/send_destroy_code", produces = "application/json;charset=UTF-8")
+    public Object sendDestroyCode() {
+        return mService.sendDestroyCode();
+    }
+
+    @PostMapping(value = "/destroy", produces = "application/json;charset=UTF-8")
+    public Object destroy(@RequestBody DestroyRequest code, HttpServletResponse response) {
+        return mService.destroy(response, code.getCode());
+    }
+
+    public Object loginWithPassword(@RequestBody UserPasswordLoginRequest request, HttpServletResponse response) {
+        return mService.loginWithPassword(response, request.getMobile(), request.getPassword(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
+    }
+
+/**
      * 密码登录
      *
      * @param request
@@ -285,6 +319,7 @@ public class AppController {
                         deferredResult.setResult(new ResponseEntity(restResult, HttpStatus.OK));
                         break;
                     } else if (restResult.getCode() == RestResult.RestCode.SUCCESS.code
+
                             || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_EXPIRED.code
                             || restResult.getCode() == RestResult.RestCode.ERROR_SERVER_ERROR.code
                             || restResult.getCode() == RestResult.RestCode.ERROR_SESSION_CANCELED.code
@@ -310,8 +345,7 @@ public class AppController {
         return deferredResult;
     }
 
-    /*
-    手机扫码操作
+    /* 手机扫码操作
     1，扫码，调用/scan_pc接口。
     2，调用/confirm_pc 接口进行确认
      */
@@ -324,7 +358,6 @@ public class AppController {
     public Object confirmPc(@RequestBody ConfirmSessionRequest request) {
         return mService.confirmPc(request);
     }
-
     @PostMapping(value = "/cancel_pc", produces = "application/json;charset=UTF-8")
     public Object cancelPc(@RequestBody CancelSessionRequest request) {
         return mService.cancelPc(request);
@@ -394,7 +427,7 @@ public class AppController {
     }
 
     /*
-    消息相关
+    发送消息
      */
     @PostMapping(value = "/messages/send")
     public Object sendMessage(@RequestBody SendMessageRequest sendMessageRequest) {

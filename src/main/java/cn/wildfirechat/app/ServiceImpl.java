@@ -5,6 +5,7 @@ import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.jpa.*;
 import cn.wildfirechat.app.pojo.*;
 import cn.wildfirechat.app.shiro.AuthDataSource;
+import cn.wildfirechat.app.shiro.PhoneCodeToken;
 import cn.wildfirechat.app.shiro.TokenAuthenticationToken;
 import cn.wildfirechat.app.shiro.UsernameCodeToken;
 import cn.wildfirechat.app.shiro.UsernamePasswordToken;
@@ -20,7 +21,12 @@ import cn.wildfirechat.sdk.model.IMResult;
 import com.aliyun.oss.*;
 import com.aliyun.oss.model.PutObjectRequest;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.qcloud.cos.COSClient;
+import com.qcloud.cos.ClientConfig;
+import com.qcloud.cos.auth.BasicCOSCredentials;
+import com.qcloud.cos.auth.COSCredentials;
+import com.qcloud.cos.exception.CosClientException;
+import com.qcloud.cos.http.HttpProtocol;
 import com.qiniu.common.QiniuException;
 import com.qiniu.http.Response;
 import com.qiniu.storage.BucketManager;
@@ -35,6 +41,7 @@ import io.minio.errors.MinioException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.*;
+import org.apache.shiro.crypto.hash.Sha1Hash;
 import org.apache.shiro.subject.Subject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,11 +60,15 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import static cn.wildfirechat.app.RestResult.RestCode.*;
 import static cn.wildfirechat.app.jpa.PCSession.PCSessionStatus.*;
@@ -162,6 +173,498 @@ public class ServiceImpl implements Service {
     }
 
 
+    private int getUserStatus(String mobile) {
+        try {
+            IMResult<InputOutputUserInfo> inputOutputUserInfoIMResult = UserAdmin.getUserByMobile(mobile);
+            if(inputOutputUserInfoIMResult != null && inputOutputUserInfoIMResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                IMResult<OutputUserStatus> outputUserStatusIMResult = UserAdmin.checkUserBlockStatus(inputOutputUserInfoIMResult.getResult().getUserId());
+                if(outputUserStatusIMResult != null && outputUserStatusIMResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                    return outputUserStatusIMResult.getResult().getStatus();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+    @Override
+    public RestResult sendLoginCode(String mobile) {
+        String remoteIp = getIp();
+        LOG.info("request send sms from {}", remoteIp);
+
+        //判断当前IP发送是否超频。
+        //另外 cn.wildfirechat.app.shiro.AuthDataSource.Count 会对用户发送消息限频
+        if (!rateLimiter.isGranted(remoteIp)) {
+            return RestResult.result(ERROR_SEND_SMS_OVER_FREQUENCY.code, "IP " + remoteIp + " 请求短信超频", null);
+        }
+
+        try {
+            //检查用户是否被封禁
+            //https://docs.wildfirechat.cn/server/admin_api/user_api.html#查询用户状态
+            int userStatus = getUserStatus(mobile);
+            if(userStatus == 2) {
+                return RestResult.error(ERROR_USER_FORBIDDEN);
+            }
+
+            String code = Utils.getRandomCode(6);
+            RestResult.RestCode restCode = authDataSource.insertRecord(mobile, code);
+
+            if (restCode != SUCCESS) {
+                return RestResult.error(restCode);
+            }
+
+
+            restCode = smsService.sendCode(mobile, code);
+            if (restCode == RestResult.RestCode.SUCCESS) {
+                return RestResult.ok(restCode);
+            } else {
+                authDataSource.clearRecode(mobile);
+                return RestResult.error(restCode);
+            }
+        } catch (Exception e) {
+            // json解析错误
+            e.printStackTrace();
+            authDataSource.clearRecode(mobile);
+        }
+        return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+    }
+
+    @Override
+    public RestResult sendResetCode(String mobile) {
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        String remoteIp = getIp();
+        LOG.info("request send sms from {}", remoteIp);
+
+        if (StringUtils.isEmpty(userId)) {
+            if (StringUtils.isEmpty(mobile)) {
+                return RestResult.error(ERROR_INVALID_PARAMETER);
+            }
+        } else {
+            try {
+                IMResult<InputOutputUserInfo> outputUserInfoIMResult = UserAdmin.getUserByUserId(userId);
+                if (outputUserInfoIMResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                    mobile = outputUserInfoIMResult.getResult().getMobile();
+                } else {
+                    if (StringUtils.isEmpty(mobile)) {
+                        return RestResult.error(ERROR_NOT_EXIST);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                if (StringUtils.isEmpty(mobile)) {
+                    return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+                }
+            }
+        }
+
+        //判断当前IP发送是否超频。
+        //另外 cn.wildfirechat.app.shiro.AuthDataSource.Count 会对用户发送消息限频
+        if (!rateLimiter.isGranted(remoteIp)) {
+            return RestResult.result(ERROR_SEND_SMS_OVER_FREQUENCY.code, "IP " + remoteIp + " 请求短信超频", null);
+        }
+
+        //检查用户是否被封禁
+        //https://docs.wildfirechat.cn/server/admin_api/user_api.html#查询用户状态
+        int userStatus = getUserStatus(mobile);
+        if(userStatus == 2) {
+            return RestResult.error(ERROR_USER_FORBIDDEN);
+        }
+
+        try {
+            String code = Utils.getRandomCode(6);
+            RestResult.RestCode restCode = smsService.sendCode(mobile, code);
+            if (restCode == RestResult.RestCode.SUCCESS) {
+                Optional<UserPassword> optional = userPasswordRepository.findById(userId);
+                UserPassword up = optional.orElseGet(() -> new UserPassword(userId));
+                up.setResetCode(code);
+                up.setResetCodeTime(System.currentTimeMillis());
+                userPasswordRepository.save(up);
+                return RestResult.ok(restCode);
+            } else {
+                return RestResult.error(restCode);
+            }
+        } catch (Exception e) {
+            // json解析错误
+            e.printStackTrace();
+        }
+        return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+    }
+
+    @Override
+    public RestResult loginWithMobileCode(HttpServletResponse httpResponse, String mobile, String code, String clientId, int platform) {
+        Subject subject = SecurityUtils.getSubject();
+        // 在认证提交前准备 token（令牌）
+        PhoneCodeToken token = new PhoneCodeToken(mobile, code);
+        // 执行认证登陆
+        try {
+            subject.login(token);
+        } catch (UnknownAccountException uae) {
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        } catch (IncorrectCredentialsException ice) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (LockedAccountException lae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (ExcessiveAttemptsException eae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        } catch (AuthenticationException ae) {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        }
+        if (subject.isAuthenticated()) {
+            long timeout = subject.getSession().getTimeout();
+            LOG.info("Login success " + timeout);
+            authDataSource.clearRecode(mobile);
+        } else {
+            return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+        }
+
+        return onLoginSuccess(httpResponse, mobile, clientId, platform, true);
+    }
+
+    @Override
+    public RestResult loginWithPassword(HttpServletResponse response, String mobile, String password, String clientId, int platform) {
+        try {
+            IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
+            if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_NOT_EXIST) {
+                return RestResult.error(ERROR_NOT_EXIST);
+            }
+            if (userResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            }
+            Optional<UserPassword> optional = userPasswordRepository.findById(userResult.getResult().getUserId());
+            if (!optional.isPresent()) {
+                return RestResult.error(ERROR_NOT_EXIST);
+            }
+            UserPassword up = optional.get();
+            if (up.getTryCount() > 5) {
+                if (System.currentTimeMillis() - up.getLastTryTime() < 5 * 60 * 1000) {
+                    return RestResult.error(ERROR_FAILURE_TOO_MUCH_TIMES);
+                }
+                up.setTryCount(0);
+            }
+            up.setTryCount(up.getTryCount()+1);
+            up.setLastTryTime(System.currentTimeMillis());
+            userPasswordRepository.save(up);
+
+            //检查用户是否被封禁
+            int userStatus = getUserStatus(mobile);
+            if(userStatus == 2) {
+                return RestResult.error(ERROR_USER_FORBIDDEN);
+            }
+
+            Subject subject = SecurityUtils.getSubject();
+            // 在认证提交前准备 token（令牌）
+            UsernamePasswordToken token = new UsernamePasswordToken(userResult.getResult().getUserId(), password);
+            // 执行认证登陆
+            try {
+                subject.login(token);
+            } catch (UnknownAccountException uae) {
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            } catch (IncorrectCredentialsException ice) {
+                return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+            } catch (LockedAccountException lae) {
+                return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+            } catch (ExcessiveAttemptsException eae) {
+                return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+            } catch (AuthenticationException ae) {
+                return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+            }
+            if (subject.isAuthenticated()) {
+                long timeout = subject.getSession().getTimeout();
+                LOG.info("Login success " + timeout);
+                up.setTryCount(0);
+                up.setLastTryTime(0);
+                userPasswordRepository.save(up);
+            } else {
+                return RestResult.error(RestResult.RestCode.ERROR_CODE_INCORRECT);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+
+        return onLoginSuccess(response, mobile, clientId, platform, false);
+    }
+
+    @Override
+    public RestResult changePassword(String oldPwd, String newPwd) {
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        Optional<UserPassword> optional = userPasswordRepository.findById(userId);
+        if (optional.isPresent()) {
+            try {
+                if(verifyPassword(optional.get(), oldPwd)) {
+                    changePassword(optional.get(), newPwd);
+                    return RestResult.ok(null);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            return RestResult.error(ERROR_NOT_EXIST);
+        }
+        return RestResult.error(ERROR_SERVER_ERROR);
+    }
+
+    @Override
+    public RestResult resetPassword(String mobile, String resetCode, String newPwd) {
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+
+        if (!StringUtils.isEmpty(mobile)) {
+            try {
+                IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
+                if (userResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
+                    return RestResult.error(ERROR_SERVER_ERROR);
+                }
+                if (StringUtils.isEmpty(userId)) {
+                    userId = userResult.getResult().getUserId();
+                } else {
+                    if(!userId.equals(userResult.getResult().getUserId())) {
+                        //错误。。。。
+                        LOG.error("reset password error, user is correct {}, {}", userId, userResult.getResult().getUserId());
+                        return RestResult.error(ERROR_SERVER_ERROR);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                return RestResult.error(ERROR_SERVER_ERROR);
+            }
+        }
+
+        Optional<UserPassword> optional = userPasswordRepository.findById(userId);
+        if (optional.isPresent()) {
+            UserPassword up = optional.get();
+            if(resetCode.equals(up.getResetCode())) {
+                if (System.currentTimeMillis() - up.getResetCodeTime() > 10 * 60 * 60 * 1000) {
+                    return RestResult.error(ERROR_CODE_EXPIRED);
+                }
+                try {
+                    changePassword(up, newPwd);
+                    up.setResetCode(null);
+                    userPasswordRepository.save(up);
+                    return RestResult.ok(null);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return RestResult.error(ERROR_SERVER_ERROR);
+                }
+            } else {
+                return RestResult.error(ERROR_CODE_INCORRECT);
+            }
+        } else {
+            return RestResult.error(ERROR_NOT_EXIST);
+        }
+    }
+
+    private void changePassword(UserPassword up, String password) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance(Sha1Hash.ALGORITHM_NAME);
+        digest.reset();
+        String salt = UUID.randomUUID().toString();
+        digest.update(salt.getBytes(StandardCharsets.UTF_8));
+        byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+        String hashedPwd = Base64.getEncoder().encodeToString(hashed);
+        up.setPassword(hashedPwd);
+        up.setSalt(salt);
+        userPasswordRepository.save(up);
+    }
+
+    private boolean verifyPassword(UserPassword up, String password) throws Exception {
+        String salt = up.getSalt();
+        MessageDigest digest = MessageDigest.getInstance(Sha1Hash.ALGORITHM_NAME);
+        if (salt != null) {
+            digest.reset();
+            digest.update(salt.getBytes(StandardCharsets.UTF_8));
+        }
+
+        byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+        String hashedPwd = Base64.getEncoder().encodeToString(hashed);
+        return hashedPwd.equals(up.getPassword());
+    }
+
+    private RestResult onLoginSuccess(HttpServletResponse httpResponse, String mobile, String clientId, int platform, boolean withResetCode) {
+        Subject subject = SecurityUtils.getSubject();
+        try {
+            //使用电话号码查询用户信息。
+            IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
+
+            //如果用户信息不存在，创建用户
+            InputOutputUserInfo user;
+            boolean isNewUser = false;
+            if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_NOT_EXIST) {
+                LOG.info("User not exist, try to create");
+
+                //获取用户名。如果用的是shortUUID生成器，是有极小概率会重复的，所以需要去检查是否已经存在相同的userName。
+                //ShortUUIDGenerator内的main函数有测试代码，可以观察一下碰撞的概率，这个重复是理论上的，作者测试了几千万次次都没有产生碰撞。
+                //另外由于并发的问题，也有同时生成相同的id并同时去检查的并同时通过的情况，但这种情况概率极低，可以忽略不计。
+                String userName;
+                int tryCount = 0;
+                do {
+                    tryCount++;
+                    userName = userNameGenerator.getUserName(mobile);
+                    if (tryCount > 10) {
+                        return RestResult.error(ERROR_SERVER_ERROR);
+                    }
+                } while (!isUsernameAvailable(userName));
+
+
+                user = new InputOutputUserInfo();
+                user.setName(userName);
+                if (mIMConfig.use_random_name) {
+                    String displayName = "用户" + (int) (Math.random() * 10000);
+                    user.setDisplayName(displayName);
+                } else {
+                    user.setDisplayName(mobile);
+                }
+                user.setMobile(mobile);
+                IMResult<OutputCreateUser> userIdResult = UserAdmin.createUser(user);
+                if (userIdResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                    user.setUserId(userIdResult.getResult().getUserId());
+                    isNewUser = true;
+                } else {
+                    LOG.info("Create user failure {}", userIdResult.code);
+                    return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+                }
+
+
+            } else if (userResult.getCode() != 0) {
+                LOG.error("Get user failure {}", userResult.code);
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            } else {
+                user = userResult.getResult();
+            }
+
+            //使用用户id获取token
+            IMResult<OutputGetIMTokenData> tokenResult = UserAdmin.getUserToken(user.getUserId(), clientId, platform);
+            if (tokenResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
+                LOG.error("Get user failure {}", tokenResult.code);
+                return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+            }
+
+            subject.getSession().setAttribute("userId", user.getUserId());
+
+            //返回用户id，token和是否新建
+            LoginResponse response = new LoginResponse();
+            response.setUserId(user.getUserId());
+            response.setToken(tokenResult.getResult().getToken());
+            response.setRegister(isNewUser);
+            response.setPortrait(user.getPortrait());
+            response.setUserName(user.getName());
+
+            if (withResetCode) {
+                String code = Utils.getRandomCode(6);
+                Optional<UserPassword> optional = userPasswordRepository.findById(user.getUserId());
+                UserPassword up;
+                if (optional.isPresent()) {
+                    up = optional.get();
+                } else {
+                    up = new UserPassword(user.getUserId(), null, null);
+                }
+                up.setResetCode(code);
+                up.setResetCodeTime(System.currentTimeMillis());
+                userPasswordRepository.save(up);
+                response.setResetCode(code);
+            }
+
+            if (isNewUser) {
+                if (!StringUtils.isEmpty(mIMConfig.welcome_for_new_user)) {
+                    sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_new_user);
+                }
+
+                if (mIMConfig.new_user_robot_friend && !StringUtils.isEmpty(mIMConfig.robot_friend_id)) {
+                    RelationAdmin.setUserFriend(user.getUserId(), mIMConfig.robot_friend_id, true, null);
+                    if (!StringUtils.isEmpty(mIMConfig.robot_welcome)) {
+                        sendTextMessage(mIMConfig.robot_friend_id, user.getUserId(), mIMConfig.robot_welcome);
+                    }
+                }
+
+                if (!StringUtils.isEmpty(mIMConfig.new_user_subscribe_channel_id)) {
+                    try {
+                        GeneralAdmin.subscribeChannel(mIMConfig.getNew_user_subscribe_channel_id(), user.getUserId());
+                    } catch (Exception e) {
+
+                    }
+                }
+            } else {
+                if (!StringUtils.isEmpty(mIMConfig.welcome_for_back_user)) {
+                    sendTextMessage("admin", user.getUserId(), mIMConfig.welcome_for_back_user);
+                }
+                if (!StringUtils.isEmpty(mIMConfig.back_user_subscribe_channel_id)) {
+                    try {
+                        IMResult<OutputBooleanValue> booleanValueIMResult = GeneralAdmin.isUserSubscribedChannel(user.getUserId(), mIMConfig.getBack_user_subscribe_channel_id());
+                        if (booleanValueIMResult != null && booleanValueIMResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS && !booleanValueIMResult.getResult().value) {
+                            GeneralAdmin.subscribeChannel(mIMConfig.back_user_subscribe_channel_id, user.getUserId());
+                        }
+                    } catch (Exception e) {
+
+                    }
+                }
+            }
+
+            Object sessionId = subject.getSession().getId();
+            httpResponse.setHeader("authToken", sessionId.toString());
+            return RestResult.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            LOG.error("Exception happens {}", e);
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+    }
+    @Override
+    public RestResult sendDestroyCode() {
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        try {
+            IMResult<InputOutputUserInfo> getUserResult = UserAdmin.getUserByUserId(userId);
+            if(getUserResult != null && getUserResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                String mobile = getUserResult.getResult().getMobile();
+                if(!StringUtils.isEmpty(mobile)) {
+                    return sendLoginCode(mobile);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+        return RestResult.error(RestResult.RestCode.ERROR_NOT_EXIST);
+    }
+
+    @Override
+    public RestResult destroy(HttpServletResponse response, String code) {
+        Subject subject = SecurityUtils.getSubject();
+        String userId = (String) subject.getSession().getAttribute("userId");
+        try {
+            IMResult<InputOutputUserInfo> getUserResult = UserAdmin.getUserByUserId(userId);
+            if(getUserResult != null && getUserResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
+                String mobile = getUserResult.getResult().getMobile();
+                if(!StringUtils.isEmpty(mobile)) {
+                    if(authDataSource.verifyCode(mobile, code) == SUCCESS) {
+                        UserAdmin.destroyUser(userId);
+                        authDataSource.clearRecode(mobile);
+                        userPasswordRepository.deleteById(userId);
+                        subject.logout();
+                        return RestResult.ok(null);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+        return RestResult.error(RestResult.RestCode.ERROR_NOT_EXIST);
+    }
+
+    private boolean isUsernameAvailable(String username) {
+        try {
+            IMResult<InputOutputUserInfo> existUser = UserAdmin.getUserByName(username);
+            if (existUser.code == ErrorCode.ERROR_CODE_NOT_EXIST.code) {
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
     /**
      * 发送PC端登录消息
      *
@@ -190,9 +693,7 @@ public class ServiceImpl implements Service {
 
         payload.setExpireDuration(60 * 1000);
         payload.setPersistFlag(ProtoConstants.PersistFlag.Not_Persist);
-        JsonObject data = new JsonObject();
-        data.addProperty("p", platform);
-        data.addProperty("t", token);
+
         payload.setBase64edData(Base64Utils.encodeToString(data.toString().getBytes()));
 
         try {
@@ -723,7 +1224,40 @@ public class ServiceImpl implements Service {
                 e.printStackTrace();
                 return RestResult.error(ERROR_SERVER_ERROR);
             }
+        } else if(ossType == 4) {
+            //Todo 需要把文件上传到文件服务器。
+        } else if(ossType == 5) {
+            COSCredentials cred = new BasicCOSCredentials(ossAccessKey, ossSecretKey);
+            ClientConfig clientConfig = new ClientConfig();
+            String [] ss = ossUrl.split("\\.");
+            if(ss.length > 3) {
+                if(!ss[1].equals("accelerate")) {
+                    clientConfig.setRegion(new com.qcloud.cos.region.Region(ss[1]));
+                } else {
+                    clientConfig.setRegion(new com.qcloud.cos.region.Region("ap-shanghai"));
+                    try {
+                        URL u = new URL(ossUrl);
+                        clientConfig.setEndPointSuffix(u.getHost());
+                    } catch (MalformedURLException e) {
+                        e.printStackTrace();
+                        return RestResult.error(ERROR_SERVER_ERROR);
+                    }
+                }
+            }
+
+            clientConfig.setHttpProtocol(HttpProtocol.https);
+            COSClient cosClient = new COSClient(cred, clientConfig);
+
+            try {
+                cosClient.putObject(bucket, fileName, localFile.getAbsoluteFile());
+            } catch (CosClientException e) {
+                e.printStackTrace();
+                return RestResult.error(ERROR_SERVER_ERROR);
+            } finally {
+                cosClient.shutdown();
+            }
         }
+
         UploadFileResponse response = new UploadFileResponse();
         response.url = url;
         return RestResult.ok(response);
@@ -797,6 +1331,46 @@ public class ServiceImpl implements Service {
                         MinioClient minioClient = new MinioClient(ossUrl, ossAccessKey, ossSecretKey);
                         minioClient.copyObject(ossFavoriteBucket, toKey, null, null, bucket, objectName, null, null);
                         request.url = ossFavoriteBucketDomain + "/" + toKey;
+                    } else if(ossType == 4) {
+                        //Todo 需要把收藏的文件保存为永久存储。
+                    } else if(ossType == 5) {
+                        COSCredentials cred = new BasicCOSCredentials(ossAccessKey, ossSecretKey);
+                        ClientConfig clientConfig = new ClientConfig();
+                        String [] ss = ossUrl.split("\\.");
+                        if(ss.length > 3) {
+                            if(!ss[1].equals("accelerate")) {
+                                clientConfig.setRegion(new com.qcloud.cos.region.Region(ss[1]));
+                            } else {
+                                clientConfig.setRegion(new com.qcloud.cos.region.Region("ap-shanghai"));
+                                try {
+                                    URL u = new URL(ossUrl);
+                                    clientConfig.setEndPointSuffix(u.getHost());
+                                } catch (MalformedURLException e) {
+                                    e.printStackTrace();
+                                    return RestResult.error(ERROR_SERVER_ERROR);
+                                }
+                            }
+                        }
+
+                        clientConfig.setHttpProtocol(HttpProtocol.https);
+                        COSClient cosClient = new COSClient(cred, clientConfig);
+
+                        path = path.substring(1);
+                        String objectName = path;
+                        String toKey = path;
+                        if (!toKey.startsWith(userId)) {
+                            toKey = userId + "-" + toKey;
+                        }
+
+                        try {
+                            cosClient.copyObject(bucket, objectName, ossFavoriteBucket, toKey);
+                            request.url = ossFavoriteBucketDomain + "/" + toKey;
+                        } catch (CosClientException e) {
+                            e.printStackTrace();
+                            return RestResult.error(ERROR_SERVER_ERROR);
+                        } finally {
+                            cosClient.shutdown();
+                        }
                     }
                 }
             } catch (Exception e) {
