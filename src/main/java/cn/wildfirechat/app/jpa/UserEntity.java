@@ -56,4 +56,16 @@ public class UserEntity {
 	@Column(name = "qq_openid")
 	private String qqOpenid;
 
+	@Column(name = "reset_code")
+	private String resetCode;
+
+	@Column(name = "reset_code_time")
+	private Long resetCodeTime;
+
+	@Column(name = "try_count")
+	private Integer tryCount;
+
+	@Column(name = "last_try_time")
+	private Long lastTryTime;
+
 }

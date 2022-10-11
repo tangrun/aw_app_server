@@ -22,16 +22,6 @@ import java.util.Map;
 @Slf4j
 @Configuration
 public class ShiroConfig {
-
-    @Autowired
-    private PhoneCodeRealm phoneCodeRealm;
-
-    @Autowired
-    private ScanCodeRealm scanCodeRealm;
-
-    @Autowired
-    private UserPasswordRealm userPasswordRealm;
-
     @Value("${wfc.all_client_support_ssl}")
     private boolean All_Client_Support_SSL;
 
@@ -117,7 +107,7 @@ public class ShiroConfig {
         defaultSecurityManager.setRealms(Arrays.asList(phoneCodeRealm, scanCodeRealm, passwordRealm));
         ShiroSessionManager sessionManager = new ShiroSessionManager();
         sessionManager.setGlobalSessionTimeout(Long.MAX_VALUE);
-        sessionManager.setSessionDAO(dbSessionDao);
+        sessionManager.setSessionDAO(sessionDAO);
 
         Cookie cookie = new SimpleCookie(ShiroHttpSession.DEFAULT_SESSION_ID_NAME);
         if (All_Client_Support_SSL) {

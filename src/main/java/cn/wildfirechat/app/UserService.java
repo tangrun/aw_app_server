@@ -2,9 +2,9 @@ package cn.wildfirechat.app;
 
 import cn.wildfirechat.app.admin.AdminService;
 import cn.wildfirechat.app.jpa.*;
-import cn.wildfirechat.app.pojo.LoginRequest;
 import cn.wildfirechat.app.pojo.LoginResponse;
 import cn.wildfirechat.app.pojo.OtherAccountResponse;
+import cn.wildfirechat.app.pojo.PhoneCodeLoginRequest;
 import cn.wildfirechat.app.shiro.AuthDataSource;
 import cn.wildfirechat.app.shiro.UsernameCodeToken;
 import cn.wildfirechat.app.shiro.UsernamePasswordToken;
@@ -24,17 +24,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.*;
+import org.apache.shiro.crypto.hash.Sha1Hash;
 import org.apache.shiro.subject.Subject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 import static cn.wildfirechat.app.RestResult.RestCode.*;
 
@@ -64,6 +71,29 @@ public class UserService {
 
     @Value("${sms.super_code}")
     private String superCode;
+
+    public RestResult destroy(String userId, String code) {
+        try {
+            UserEntity userEntity = userService.findByUserId(userId);
+            Assert.notNull(userEntity, "用户不存在");
+            String mobile = userEntity.getMobile();
+            if (StringUtils.isNotBlank(mobile)) {
+                if (authDataSource.verifyCode(mobile, code) == SUCCESS) {
+                    UserAdmin.destroyUser(userId);
+                    authDataSource.clearRecode(mobile);
+                    userService.deleteUserInfo(mobile);
+                    Subject subject = SecurityUtils.getSubject();
+                    subject.logout();
+                    return RestResult.ok(null);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
+        }
+        return RestResult.error(RestResult.RestCode.ERROR_NOT_EXIST);
+    }
+
 
     /**
      * 发送验证码是 s_ip
@@ -141,7 +171,7 @@ public class UserService {
     /**
      * 验证码登录
      */
-    public RestResult<LoginResponse> loginBySMSCode(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginBySMSCode(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         String mobile = request.getMobile();
         String code = request.getCode();
         String clientId = request.getClientId();
@@ -184,7 +214,7 @@ public class UserService {
                     // 用户异常状态 提示
                     return RestResult.error(userEntity.getLoginRemark());
                 }
-            }else {
+            } else {
                 register = true;
             }
 
@@ -216,7 +246,6 @@ public class UserService {
 //            log.debug("mobile {} login, register {}, coverOld {},user {}", mobile, register, coverOld, user);
 
 
-
             if (register) {
                 //获取用户名。如果用的是shortUUID生成器，是有极小概率会重复的，所以需要去检查是否已经存在相同的userName。
                 //ShortUUIDGenerator内的main函数有测试代码，可以观察一下碰撞的概率，这个重复是理论上的，作者测试了几千万次次都没有产生碰撞。
@@ -233,9 +262,9 @@ public class UserService {
 
                 user = new InputOutputUserInfo();
                 user.setName(userName);
-                if(request.getDisplayName() != null && !request.getDisplayName().equals("")){
+                if (request.getDisplayName() != null && !request.getDisplayName().equals("")) {
                     user.setDisplayName(request.getDisplayName());//昵称
-                }else {
+                } else {
                     if (mIMConfig.use_random_name) {
                         String displayName = "用户" + (int) (Math.random() * 10000);
                         user.setDisplayName(displayName);
@@ -243,7 +272,7 @@ public class UserService {
                         user.setDisplayName(mobile);
                     }
                 }
-                if(request.getPortrait() != null && !request.getPortrait().equals("")){
+                if (request.getPortrait() != null && !request.getPortrait().equals("")) {
                     user.setPortrait(request.getPortrait());//头像
                 }
                 user.setMobile(mobile);
@@ -312,10 +341,10 @@ public class UserService {
 
             // 判断是否绑定三方登录信息
             {
-                if(userEntity == null){
+                if (userEntity == null) {
                     userEntity = userService.findByUserId(user.getUserId());
                 }
-                if (userEntity !=null) {
+                if (userEntity != null) {
                     if (StringUtils.isNotBlank(request.getWechat_unionid())) {
                         userEntity.setWechatUnionid(request.getWechat_unionid().trim());
                         userService.saveUserEntity(userEntity);
@@ -323,8 +352,8 @@ public class UserService {
                         userEntity.setQqOpenid(request.getQq_openid().trim());
                         userService.saveUserEntity(userEntity);
                     }
-                }else{
-                    log.error("user entity null userId: {},mobile: {}",user.getUserId(),user.getMobile());
+                } else {
+                    log.error("user entity null userId: {},mobile: {}", user.getUserId(), user.getMobile());
                 }
             }
 
@@ -351,7 +380,7 @@ public class UserService {
      * @param request
      * @return
      */
-    public RestResult<LoginResponse> loginByPwd(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginByPwd(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         if (!rateLimiter.isGranted("lp_" + request.getMobile())) {
             return RestResult.error(ERROR_REQUEST_OVER_FREQUENCY);
         }
@@ -450,7 +479,7 @@ public class UserService {
      * @param request
      * @return
      */
-    public RestResult<LoginResponse> loginByOther(HttpServletResponse httpResponse, LoginRequest request) {
+    public RestResult<LoginResponse> loginByOther(HttpServletResponse httpResponse, PhoneCodeLoginRequest request) {
         try {
             UserEntity userEntity = null;
             if (StringUtils.isNotBlank(request.getQq_openid())) {
@@ -463,7 +492,7 @@ public class UserService {
                 userEntity = userEntityRepository.findFirstByWechatUnionid(request.getWechat_unionid());
             }
 
-            if (userEntity == null){
+            if (userEntity == null) {
                 //System.out.println("没有找到对应的用户信息");
                 return RestResult.error(ERROR_USER_NOT_EXIST);
             }
@@ -471,7 +500,7 @@ public class UserService {
                 return RestResult.error(userEntity.getLoginRemark());
             }
 
-            if(userEntity.getMobile() == null || userEntity.getMobile().equals("")){
+            if (userEntity.getMobile() == null || userEntity.getMobile().equals("")) {
                 // 未绑定手机号
                 return RestResult.error(ERROR_USER_NOT_BIND_MOBILE);
             }
@@ -546,19 +575,19 @@ public class UserService {
      * 已注册用户 绑定微信、QQ
      *
      * @param userId
-     * @param type 1、微信；2、QQ
+     * @param type    1、微信；2、QQ
      * @param otherId
      * @return
      */
-    public RestResult<Void> setBindOtherAccount(String userId,int type, String otherId) {
+    public RestResult<Void> setBindOtherAccount(String userId, int type, String otherId) {
         UserEntity userEntity = userEntityRepository.findFirstByUserId(userId);
         if (userEntity == null)
             return RestResult.error(ERROR_USER_NOT_EXIST);
 
-        if(otherId==null || otherId.equals("")){
+        if (otherId == null || otherId.equals("")) {
             // 解除账号绑定
             userEntity.setWechatUnionid("");
-        }else {
+        } else {
             // 绑定账号
             if (type == 1) {
                 // 微信
@@ -591,12 +620,12 @@ public class UserService {
      * @return
      */
     public RestResult<OtherAccountResponse> getOtherAccount(String userId) {
-        UserEntity userEntity =  userEntityRepository.findFirstByUserId(userId);
+        UserEntity userEntity = userEntityRepository.findFirstByUserId(userId);
         if (userEntity == null)
             return RestResult.error(ERROR_USER_NOT_EXIST);
         OtherAccountResponse response = new OtherAccountResponse();
-        response.setQqId(userEntity.getQqOpenid()==null?"":userEntity.getQqOpenid());
-        response.setWxId(userEntity.getWechatUnionid()==null?"":userEntity.getWechatUnionid());
+        response.setQqId(userEntity.getQqOpenid() == null ? "" : userEntity.getQqOpenid());
+        response.setWxId(userEntity.getWechatUnionid() == null ? "" : userEntity.getWechatUnionid());
         return RestResult.ok(response);
     }
 
@@ -621,7 +650,7 @@ public class UserService {
             return RestResult.error(ERROR_USER_NOT_EXIST);
         }
 
-        userEntity.setPasswd(DigestUtils.md5DigestAsHex(pwd.getBytes()));
+        internalSetNewPassword(userEntity, pwd);
         userService.saveUserEntity(userEntity);
         return RestResult.ok();
     }
@@ -645,13 +674,11 @@ public class UserService {
         }
 
         if (StringUtils.isNotBlank(userEntity.getPasswd())
-                && !userEntity.getPasswd().equals(DigestUtils.md5DigestAsHex(oldPwd.getBytes()))
-        ) {
+                && !internalVerifyPassword(userEntity, oldPwd)) {
             return RestResult.error(RestResult.RestCode.ERROR_USER_PASSWORD_ERROR);
         } else {
-            userEntity.setPasswd(DigestUtils.md5DigestAsHex(pwd.getBytes()));
+            internalSetNewPassword(userEntity, pwd);
         }
-
         userEntityRepository.save(userEntity);
         return RestResult.ok(null);
     }
@@ -667,10 +694,45 @@ public class UserService {
         UserEntity userEntity = userService.findByUserId(userId);
         if (userEntity == null)
             return RestResult.error(ERROR_USER_NOT_EXIST);
-
-        userEntity.setPasswd(DigestUtils.md5DigestAsHex(pwd.getBytes()));
+        internalSetNewPassword(userEntity, pwd);
         userService.saveUserEntity(userEntity);
         return RestResult.ok(null);
+    }
+
+    private void internalSetNewPassword(UserEntity entity, String password)  {
+        String salt = StringUtils.isBlank(entity.getSalt()) ? UUID.randomUUID().toString() : entity.getSalt();
+        MessageDigest digest = null;
+        try {
+            digest = MessageDigest.getInstance(Sha1Hash.ALGORITHM_NAME);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            throw new RuntimeException("设置密码失败");
+        }
+        digest.reset();
+        digest.update(salt.getBytes(StandardCharsets.UTF_8));
+        byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+        String hashedPwd = Base64.getEncoder().encodeToString(hashed);
+        entity.setPasswd(hashedPwd);
+        entity.setSalt(salt);
+    }
+
+    private boolean internalVerifyPassword(UserEntity entity, String password) {
+        if (StringUtils.isBlank(entity.getSalt())) {
+            return StringUtils.equals(DigestUtils.md5DigestAsHex(password.getBytes()), entity.getPasswd());
+        } else {
+            MessageDigest digest = null;
+            try {
+                digest = MessageDigest.getInstance(Sha1Hash.ALGORITHM_NAME);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+                throw new RuntimeException("验证密码失败");
+            }
+            digest.reset();
+            digest.update(entity.getSalt().getBytes(StandardCharsets.UTF_8));
+            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+            String hashedPwd = Base64.getEncoder().encodeToString(hashed);
+            return hashedPwd.equals(entity.getPasswd());
+        }
     }
 
 
@@ -733,10 +795,26 @@ public class UserService {
         return findOrCreateUserEntityByMobile(mobile, null);
     }
 
-    public RestResult<Void> sendCode(String mobile) {
+    /**
+     * @param userId
+     * @param type   0登录 1重置 2注销
+     * @return
+     */
+    public RestResult<Void> sendCodeByUserId(String userId, int type) {
+        UserEntity userEntity = userService.findByUserId(userId);
+        Assert.notNull(userEntity, "用户不存在");
+        Assert.isTrue(StringUtils.isNotBlank(userEntity.getMobile()), "未绑定手机号");
+        return userService.sendCode(userEntity.getMobile(), type);
+    }
 
+    /**
+     * @param mobile
+     * @param type   0登录 1重置 2注销
+     * @return
+     */
+    public RestResult<Void> sendCode(String mobile, int type) {
         String remoteIp = Utils.getIpAddress();//getIp();
-        log.info("request send login sms from {} ip:{}", mobile, remoteIp);
+        log.info("request send login sms from {} ip:{} type: {}", mobile, remoteIp, type);
 
         UserEntity userEntity = userService.findByMobile(mobile);
         if (userEntity != null) {
@@ -755,7 +833,7 @@ public class UserService {
         try {
             String code = Utils.getRandomCode(4);
             RestResult<Void> result = authDataSource.insertRecord(mobile, code);
-            if (!result.isSuccess()){
+            if (!result.isSuccess()) {
                 return result;
             }
 

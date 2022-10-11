@@ -2,6 +2,7 @@ package cn.wildfirechat.app.conference;
 
 import cn.wildfirechat.app.pojo.ConferenceInfo;
 import cn.wildfirechat.app.pojo.ConferenceInfoRequest;
+import cn.wildfirechat.app.pojo.RecordingRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

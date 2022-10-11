@@ -50,12 +50,6 @@ public class AppController {
     @Autowired
     private UserService userService;
 
-    @Value("${call.server.host}")
-    private String callServerHost;
-
-    @Value("${call.server.port}")
-    private Integer callServerPort;
-
     @GetMapping()
     public Object health() {
         return "Ok";
@@ -63,9 +57,7 @@ public class AppController {
 
     @PostMapping(value = "/call/serverInfo")
     public RestResult<CallServerInfoResp> serverInfo() {
-        return RestResult.ok(new CallServerInfoResp()
-                .setServerHost(callServerHost)
-                .setServerPort(callServerPort));
+        return RestResult.error("不支持，请升级最新版本");
     }
 
     //region 拓展字段相关设置接口
@@ -162,56 +154,37 @@ public class AppController {
      */
     @PostMapping(value = "/send_code", produces = "application/json;charset=UTF-8")
     public Object sendLoginCode(@RequestBody SendCodeRequest request) {
-        return userService.sendCode(request.getMobile());
+        return userService.sendCode(request.getMobile(),0);
+    }
+
+    @PostMapping(value = "/send_reset_code", produces = "application/json;charset=UTF-8")
+    public Object sendResetCode(@RequestBody SendCodeRequest request) {
+        return userService.sendCode(request.getMobile(),1);
+    }
+
+    @PostMapping(value = "/send_destroy_code", produces = "application/json;charset=UTF-8")
+    public Object sendDestroyCode(@SessionAttribute(SessionAttributes.userId) String userId) {
+        return userService.sendCodeByUserId(userId, 2);
+    }
+
+    @PostMapping(value = "/destroy", produces = "application/json;charset=UTF-8")
+    public Object destroy(@SessionAttribute(SessionAttributes.userId) String userId,@RequestBody DestroyRequest code ) {
+        return userService.destroy(userId, code.getCode());
     }
 
     /**
-     * 验证码登录
-     *
+     * 短信登录
      * @param request
      * @param response
      * @return
      */
     @PostMapping(value = "/login", produces = "application/json;charset=UTF-8")
-    public Object loginWithMobileCode(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginBySMS(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
+        request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
         return userService.loginBySMSCode(response, request);
     }
 
-    @PostMapping(value = "/login_pwd", produces = "application/json;charset=UTF-8")
-    public Object loginWithPassword(@RequestBody UserPasswordLoginRequest request, HttpServletResponse response) {
-        return mService.loginWithPassword(response, request.getMobile(), request.getPassword(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
-    }    
-
-@PostMapping(value = "/change_pwd", produces = "application/json;charset=UTF-8")
-    public Object changePassword(@RequestBody ChangePasswordRequest request) {
-        return mService.changePassword(request.getOldPassword(), request.getNewPassword());
-    }
-
-    @PostMapping(value = "/send_reset_code", produces = "application/json;charset=UTF-8")
-    public Object sendResetCode(@RequestBody SendCodeRequest request) {
-        return mService.sendResetCode(request.getMobile());
-    }
-
-    @PostMapping(value = "/reset_pwd", produces = "application/json;charset=UTF-8")
-    public Object resetPassword(@RequestBody ResetPasswordRequest request) {
-        return mService.resetPassword(request.getMobile(), request.getResetCode(), request.getNewPassword());
-    }
-
-    @PostMapping(value = "/send_destroy_code", produces = "application/json;charset=UTF-8")
-    public Object sendDestroyCode() {
-        return mService.sendDestroyCode();
-    }
-
-    @PostMapping(value = "/destroy", produces = "application/json;charset=UTF-8")
-    public Object destroy(@RequestBody DestroyRequest code, HttpServletResponse response) {
-        return mService.destroy(response, code.getCode());
-    }
-
-    public Object loginWithPassword(@RequestBody UserPasswordLoginRequest request, HttpServletResponse response) {
-        return mService.loginWithPassword(response, request.getMobile(), request.getPassword(), request.getClientId(), request.getPlatform() == null ? 0 : request.getPlatform());
-    }
-
-/**
+    /**
      * 密码登录
      *
      * @param request
@@ -219,7 +192,7 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/api/login", produces = "application/json;charset=UTF-8")
-    public Object loginByPwd(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginByPwd(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
         return userService.loginByPwd(response, request);
     }
@@ -232,7 +205,7 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/api/otherLogin", produces = "application/json;charset=UTF-8")
-    public Object loginOther(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public Object loginOther(@RequestBody PhoneCodeLoginRequest request, HttpServletResponse response) {
         request.setPlatform(request.getPlatform() == null ? 0 : request.getPlatform());
         return userService.loginByOther(response, request);
     }
@@ -244,7 +217,7 @@ public class AppController {
      * @return
      */
     @PostMapping(value = "/api/bindOtherAccount", produces = "application/json;charset=UTF-8")
-    public RestResult<Void> setBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId, @RequestBody LoginRequest request) {
+    public RestResult<Void> setBindOtherAccount(@SessionAttribute(SessionAttributes.userId) String userId, @RequestBody PhoneCodeLoginRequest request) {
         return userService.setBindOtherAccount(userId, request.getPlatform(),request.getCode());
     }
 
