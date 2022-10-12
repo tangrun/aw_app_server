@@ -8,12 +8,10 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.GenericConverter;
-import org.springframework.format.Formatter;
 import org.springframework.format.FormatterRegistry;
-import org.springframework.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.text.ParseException;
 import java.util.*;
 
 @Configuration
@@ -24,6 +22,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addConverter(new Converter<String, Date>() {
             @Override
             public Date convert(String source) {
+                if (StringUtils.isBlank(source))
+                    return null;
                 long l = Long.parseLong(source);
                 return new Date(l);
             }
@@ -55,7 +55,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         }
                     }
                     //默认
-                    String[] fields = StringUtils.commaDelimitedListToStringArray((String) source);
+                    String[] fields = StringUtils.split((String) source,",");
                     Collection<Object> target = CollectionFactory.createCollection(collectType, elementType, fields.length);
                     if (elementType == null) {
                         for (String field : fields) {
