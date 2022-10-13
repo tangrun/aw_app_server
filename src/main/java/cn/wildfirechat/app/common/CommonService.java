@@ -90,7 +90,7 @@ public class CommonService {
         String fileName = System.currentTimeMillis() + "-" + uuid + ".jpg" ;
         Calendar instance = Calendar.getInstance();
         String fileDir = instance.get(Calendar.YEAR)
-                + File.separator + (instance.get(Calendar.MONTH))
+                + File.separator + (instance.get(Calendar.MONTH)+1)
                 + File.separator + instance.get(Calendar.DAY_OF_MONTH);
         File localFile = new File(ossTempPath + File.separator + fileDir, fileName);
 
