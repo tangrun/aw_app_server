@@ -344,10 +344,10 @@ public class AdminService {
      * @param entry
      * @return
      */
-    public RestResult sendWorkReportMessageToGroup(String fromUser, String targetId, VOWorkReport entry) {
+    public RestResult sendWorkReportMessage(String fromUser, String targetId, boolean group, VOWorkReport entry) {
         Conversation conversation = new Conversation();
         conversation.setTarget(targetId);
-        conversation.setType(ProtoConstants.ConversationType.ConversationType_Group);
+        conversation.setType(group?ProtoConstants.ConversationType.ConversationType_Group: ProtoConstants.ConversationType.ConversationType_Private);
         MessagePayload payload = new MessagePayload();
         payload.setType(MessageContentType.Type_Work_Report_Send_To);
         payload.setPersistFlag(ProtoConstants.PersistFlag.Persist_And_Count);

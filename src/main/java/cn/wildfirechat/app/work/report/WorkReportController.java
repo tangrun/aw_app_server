@@ -3,6 +3,7 @@ package cn.wildfirechat.app.work.report;
 import cn.wildfirechat.app.common.pojo.Page;
 import cn.wildfirechat.app.work.report.enums.WorkReportType;
 import cn.wildfirechat.app.work.report.pojo.InputWorkReportRequest;
+import cn.wildfirechat.app.work.report.pojo.ReportListRequest;
 import cn.wildfirechat.app.work.report.service.WorkReportService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.time.DateUtils;
@@ -13,7 +14,9 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 
 /**
@@ -49,34 +52,26 @@ public class WorkReportController {
         return workReportService.createOrUpdateReport(userId, reportId, request);
     }
 
-    /**
-     * @param type
-     * @param beginTime
-     * @param endTime
-     * @return
-     * @see WorkReportType
-     */
     @PostMapping(value = "getReceiveReportList")
-    public Object getMyReceiverReportList(@RequestParam(defaultValue = "") String type, @DateTimeFormat(pattern = "yyyy-MM-dd") Date beginTime, @DateTimeFormat(pattern = "yyyy-MM-dd") Date endTime, Page page) {
+    public Object getMyReceiverReportList(ReportListRequest request) {
         Subject subject = SecurityUtils.getSubject();
         String userId = (String) subject.getSession().getAttribute("userId");
 
-        if (beginTime != null) beginTime = DateUtils.ceiling(beginTime, Calendar.DAY_OF_MONTH);
-        if (endTime != null) endTime = DateUtils.ceiling(endTime, Calendar.DAY_OF_MONTH);
-
-        return workReportService.getReportList(null, userId, WorkReportType.valueOfSafety(type), beginTime, endTime, page);
+        return workReportService.getReportList(request.getUsers(), Collections.singletonList(userId),
+                WorkReportType.valueOfSafety(request.getType()),
+                request.getBeginTime(), request.getEndTime()
+                , request.convert2PageRequest());
     }
 
 
     @PostMapping("getMyReportList")
-    public Object getReportList(@RequestParam(defaultValue = "") String type, @DateTimeFormat(pattern = "yyyy-MM-dd") Date beginTime, @DateTimeFormat(pattern = "yyyy-MM-dd") Date endTime, Page page) {
+    public Object getReportList(ReportListRequest request) {
         Subject subject = SecurityUtils.getSubject();
         String userId = (String) subject.getSession().getAttribute("userId");
-
-        if (beginTime != null) beginTime = DateUtils.ceiling(beginTime, Calendar.DAY_OF_MONTH);
-        if (endTime != null) endTime = DateUtils.ceiling(endTime, Calendar.DAY_OF_MONTH);
-
-        return workReportService.getReportList(userId, null, WorkReportType.valueOfSafety(type), beginTime, endTime, page);
+        return workReportService.getReportList(Collections.singletonList(userId), request.getUsers(),
+                WorkReportType.valueOfSafety(request.getType()),
+                request.getBeginTime(), request.getEndTime()
+                , request.convert2PageRequest());
     }
 
 }

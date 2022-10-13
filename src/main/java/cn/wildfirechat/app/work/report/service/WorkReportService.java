@@ -10,12 +10,16 @@ import cn.wildfirechat.app.work.report.entity.WorkReportEntry;
 import cn.wildfirechat.app.work.report.entity.WorkReportToEntry;
 import cn.wildfirechat.app.work.report.enums.WorkReportType;
 import cn.wildfirechat.app.work.report.pojo.InputWorkReportRequest;
+import cn.wildfirechat.app.work.report.pojo.ReportListRequest;
 import cn.wildfirechat.app.work.report.pojo.VOWorkReport;
 import cn.wildfirechat.app.work.report.repository.WorkReportRepository;
 import cn.wildfirechat.app.work.report.repository.WorkReportTempRepository;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
@@ -80,7 +84,7 @@ public class WorkReportService {
         WorkReportType workReportType = WorkReportType.valueOfSafety(request.getType());
         Assert.notNull(workReportType, "类型不能为空");
         workReportEntry.setType(workReportType);
-
+        // 附件处理
         Stream<String> newAttachments = ObjectUtils.defaultIfNull(request.getAttachment(), new ArrayList<MultipartFile>())
                 .stream()
                 .map((v) -> {
@@ -95,11 +99,12 @@ public class WorkReportService {
                 .concat(ObjectUtils.defaultIfNull(request.getAttachmentOld(), new ArrayList<String>()).stream(), newAttachments)
                 .filter(StringUtils::isNotBlank)
                 .collect(Collectors.toList());
-
         workReportEntry.setAttachment(StringUtils.join(finalAttachments, ","));
 
+        //
         workReportRepository.saveAndFlush(workReportEntry);
 
+        // 修改时 删除之前的汇报人
         if (reportId != null)
             workReportTempRepository.deleteAllByReportId(reportId);
         List<WorkReportToEntry> list = request.getReportTo().stream()
@@ -113,8 +118,17 @@ public class WorkReportService {
         workReportTempRepository.saveAll(list);
 
         VOWorkReport voWorkReport = convert2VO(workReportEntry);
+
+        // 发送的群
         for (IdNamePojo idName : request.getSendTo()) {
-            adminService.sendWorkReportMessageToGroup(userId, idName.getId(), voWorkReport);
+            adminService.sendWorkReportMessage(userId, idName.getId(), true, voWorkReport);
+        }
+
+        // 通知汇报人
+        if (request.getNotify() == Boolean.TRUE) {
+            for (IdNamePojo idNamePojo : request.getReportTo()) {
+                adminService.sendWorkReportMessage(userId, idNamePojo.getId(), false, voWorkReport);
+            }
         }
 
         return RestResult.ok(null);
@@ -129,20 +143,33 @@ public class WorkReportService {
      * @param endTime
      * @return
      */
-    public RestResult getReportList(String userId, String targetId, WorkReportType type, Date beginTime, Date endTime, Page page) {
-        List<Long> ids = null;
-        if (StringUtils.isNotBlank(targetId)) {
-            ids = workReportTempRepository.findAllReportIdByTargetId(targetId);
-            if (ids.isEmpty()) return RestResult.ok(Collections.emptyList());
+    public RestResult getReportList(List<String> userIds, List<String> reportUserIds,
+                                    WorkReportType type,
+                                    Date beginTime, Date endTime, PageRequest pageRequest
+    ) {
+        if (userIds!=null && userIds.isEmpty())
+            userIds = null;
+        if (reportUserIds!=null && reportUserIds.isEmpty())
+            reportUserIds = null;
+        if (beginTime != null) beginTime = DateUtils.truncate(beginTime, Calendar.DAY_OF_MONTH);
+        if (endTime != null) endTime = DateUtils.ceiling(endTime, Calendar.DAY_OF_MONTH);
+        if (pageRequest==null) {
+            pageRequest = PageRequest.of(0, 12);
         }
-        List<VOWorkReport> list = workReportRepository.getReportList(userId, ids, type, beginTime, endTime, page.convert2PageRequest())
+
+        List<VOWorkReport> list = workReportRepository.getReportList2(
+                        userIds,
+                        reportUserIds,
+                        type,
+                        beginTime,
+                        endTime,
+                        pageRequest)
                 .stream().map(new Function<WorkReportEntry, VOWorkReport>() {
                     @Override
                     public VOWorkReport apply(WorkReportEntry entry) {
                         return convert2VO(entry);
                     }
                 }).collect(Collectors.toList());
-
 
         return RestResult.ok(list);
     }

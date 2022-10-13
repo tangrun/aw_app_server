@@ -10,8 +10,11 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.GenericConverter;
 import org.springframework.format.FormatterRegistry;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.lang.annotation.Annotation;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Configuration
@@ -19,15 +22,38 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addFormatters(FormatterRegistry registry) {
-        registry.addConverter(new Converter<String, Date>() {
+        registry.addConverter(new GenericConverter() {
+
             @Override
-            public Date convert(String source) {
-                if (StringUtils.isBlank(source))
+            public Set<ConvertiblePair> getConvertibleTypes() {
+                return Collections.singleton(new ConvertiblePair(String.class, Date.class));
+            }
+
+            @Override
+            public Object convert(Object source, TypeDescriptor sourceType, TypeDescriptor targetType) {
+                if (StringUtils.isBlank((CharSequence) source))
                     return null;
-                long l = Long.parseLong(source);
-                return new Date(l);
+
+                {
+                    DateTimeFormat dateTimeFormat = targetType.getAnnotation(DateTimeFormat.class);
+                    if (dateTimeFormat != null) {
+                        try {
+                            return new SimpleDateFormat(dateTimeFormat.pattern()).parse((String) source);
+                        } catch (Exception e) {
+                        }
+                    }
+                }
+
+                try {
+                    long l = Long.parseLong((String) source);
+                    return new Date(l);
+                } catch (Exception e) {
+                }
+
+                return null;
             }
         });
+
         registry.addConverter(new GenericConverter() {
             @Override
             public Set<ConvertiblePair> getConvertibleTypes() {
@@ -55,7 +81,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         }
                     }
                     //默认
-                    String[] fields = StringUtils.split((String) source,",");
+                    String[] fields = StringUtils.split((String) source, ",");
                     Collection<Object> target = CollectionFactory.createCollection(collectType, elementType, fields.length);
                     if (elementType == null) {
                         for (String field : fields) {

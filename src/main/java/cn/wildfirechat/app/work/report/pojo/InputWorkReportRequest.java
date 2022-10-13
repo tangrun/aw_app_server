@@ -35,4 +35,9 @@ public class InputWorkReportRequest {
      */
     public List<IdNamePojo> sendTo;
 
+    /**
+     * 是否通知汇报人
+     */
+    public Boolean notify;
+
 }

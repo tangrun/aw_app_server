@@ -24,4 +24,14 @@ public interface WorkReportRepository extends JpaRepositoryImplementation<WorkRe
     )
     List<WorkReportEntry> getReportList(@Param("userId") String userId, @Param("ids") List<Long> ids, @Param("type") WorkReportType type, @Param("beginTime") Date beginTime, @Param("endTime") Date endTime, Pageable pageable);
 
+    @Query("select u from WorkReportEntry u,WorkReportToEntry t where "
+            + "t.reportId = u.id "
+            + "and (:userIds is null or u.userId in (:userIds)) "
+            + "and (coalesce(:reportUserIds, null) is null or t.targetId in (:reportUserIds)) "
+            + "and (:type is null or u.type = :type) "
+            + "and (:beginTime is null or u.updateTime >= :beginTime) "
+            + "and (:endTime is null or u.updateTime <= :endTime) "
+            + "order by u.updateTime desc " )
+    List<WorkReportEntry> getReportList2(@Param("userIds") List<String> userIds, @Param("reportUserIds") List<String> reportUserIds, @Param("type") WorkReportType type,@Param("beginTime") Date beginTime, @Param("endTime") Date endTime, Pageable pageable);
+
 }
