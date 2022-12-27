@@ -210,7 +210,10 @@ public class UserService {
             UserEntity userEntity = userService.findByMobile(mobile);
             InputOutputUserInfo user = null;
             if (userEntity != null) {
-                if (userEntity.getState() != 0) {
+                if (userEntity.getState() == 1) {
+                    // 已注销用户重新注册
+                    register = true;
+                } else if (userEntity.getState() != 0) {
                     // 用户异常状态 提示
                     return RestResult.error(userEntity.getLoginRemark());
                 }
@@ -286,13 +289,11 @@ public class UserService {
             } else {
                 //使用电话号码查询用户信息。
                 IMResult<InputOutputUserInfo> userResult = UserAdmin.getUserByMobile(mobile);
-                if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_NOT_EXIST) {
-                    register = true;
-                } else if (userResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
-                    log.info("手机号 {} 查询用户信息失败 {}", mobile, userResult.code);
-                    return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
-                } else {
+                if (userResult.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
                     user = userResult.getResult();
+                } else {
+                    log.info("手机号 {} 查询用户信息失败 {}", mobile, userResult.code);
+                    return RestResult.result(userResult);
                 }
             }
 
@@ -345,13 +346,16 @@ public class UserService {
                     userEntity = userService.findByUserId(user.getUserId());
                 }
                 if (userEntity != null) {
+                    boolean save = false;
                     if (StringUtils.isNotBlank(request.getWechat_unionid())) {
                         userEntity.setWechatUnionid(request.getWechat_unionid().trim());
-                        userService.saveUserEntity(userEntity);
+                        save = true;
                     } else if (StringUtils.isNotBlank(request.getQq_openid())) {
                         userEntity.setQqOpenid(request.getQq_openid().trim());
-                        userService.saveUserEntity(userEntity);
+                        save = true;
                     }
+                    if (save)
+                        userService.saveUserEntity(userEntity);
                 } else {
                     log.error("user entity null userId: {},mobile: {}", user.getUserId(), user.getMobile());
                 }
@@ -699,7 +703,7 @@ public class UserService {
         return RestResult.ok(null);
     }
 
-    private void internalSetNewPassword(UserEntity entity, String password)  {
+    private void internalSetNewPassword(UserEntity entity, String password) {
         String salt = StringUtils.isBlank(entity.getSalt()) ? UUID.randomUUID().toString() : entity.getSalt();
         MessageDigest digest = null;
         try {
@@ -718,6 +722,7 @@ public class UserService {
 
     private boolean internalVerifyPassword(UserEntity entity, String password) {
         if (StringUtils.isBlank(entity.getSalt())) {
+            // 老的密码方式 没有salt
             return StringUtils.equals(DigestUtils.md5DigestAsHex(password.getBytes()), entity.getPasswd());
         } else {
             MessageDigest digest = null;
@@ -741,7 +746,7 @@ public class UserService {
      * @return null user dont exists
      */
     private UserEntity findOrCreateUserEntityByMobile(String mobile, String userId) {
-        //判断用户是否存在
+        //判断用户是否注册 im端
         InputOutputUserInfo user = StringUtils.isNotBlank(mobile) ? adminService.getUserByMobile(mobile)
                 : StringUtils.isNotBlank(userId) ? adminService.getUserById(userId)
                 : null;
@@ -749,6 +754,7 @@ public class UserService {
             return null;
         }
 
+        // app端 是否有记录
         UserEntity userEntity = StringUtils.isNotBlank(mobile) ? userEntityRepository.findFirstByMobile(mobile)
                 : StringUtils.isNotBlank(userId) ? userEntityRepository.findFirstByUserId(userId)
                 : null;

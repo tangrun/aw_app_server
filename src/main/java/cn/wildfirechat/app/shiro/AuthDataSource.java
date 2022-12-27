@@ -4,6 +4,7 @@ import cn.wildfirechat.app.RestResult;
 import cn.wildfirechat.app.jpa.*;
 import cn.wildfirechat.app.pojo.SessionOutput;
 import cn.wildfirechat.app.tools.Utils;
+import org.apache.shiro.crypto.hash.Sha1Hash;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -73,11 +78,33 @@ public class AuthDataSource {
     public RestResult.RestCode verifyPassword(String mobile, String password) {
         //判断用户是否已经设置密码
         UserEntity userEntity = userRepository.findFirstByMobile(mobile);
-        if(userEntity != null && userEntity.passwd.equals(DigestUtils.md5DigestAsHex(password.getBytes()))){
-            // 密码不正确时
-            return RestResult.RestCode.SUCCESS;
+        if(userEntity == null){
+            return RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
         }
-        return RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
+
+        if (org.apache.commons.lang3.StringUtils.isBlank(userEntity.getSalt())) {
+            boolean val = org.apache.commons.lang3.StringUtils.equals(DigestUtils.md5DigestAsHex(password.getBytes()), userEntity.getPasswd());
+            return val?RestResult.RestCode.SUCCESS:RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
+        } else {
+            MessageDigest digest = null;
+            try {
+                digest = MessageDigest.getInstance(Sha1Hash.ALGORITHM_NAME);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+                throw new RuntimeException("验证密码失败");
+            }
+            digest.reset();
+            digest.update(userEntity.getSalt().getBytes(StandardCharsets.UTF_8));
+            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
+            String hashedPwd = Base64.getEncoder().encodeToString(hashed);
+            return hashedPwd.equals(userEntity.getPasswd())?RestResult.RestCode.SUCCESS:RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
+        }
+
+        //if(userEntity != null && userEntity.passwd.equals(DigestUtils.md5DigestAsHex(password.getBytes()))){
+        //    // 密码不正确时
+        //    return RestResult.RestCode.SUCCESS;
+        //}
+        //return RestResult.RestCode.ERROR_USER_PASSWORD_ERROR;
     }
 
     public RestResult.RestCode verifyCode(String mobile, String code) {

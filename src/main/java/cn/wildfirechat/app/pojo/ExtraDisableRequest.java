@@ -2,10 +2,14 @@ package cn.wildfirechat.app.pojo;
 
 import lombok.Data;
 
+import javax.validation.constraints.NotNull;
+
 @Data
 public class ExtraDisableRequest {
 
+    @NotNull
     String targetId;
-    Integer disable;
+    @NotNull
+    Boolean disable;
 
 }

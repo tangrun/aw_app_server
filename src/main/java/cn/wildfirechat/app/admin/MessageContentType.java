@@ -11,5 +11,6 @@ public interface MessageContentType {
     int Type_Schedule_share = 1011;//日程分享消息
     int Type_Schedule_receive = 1012;//日程待接收消息
     int Type_Group_Solitaire = 1020;// 接龙
+    int Type_Urgent_Msg = 1021;// 着急令
 
 }

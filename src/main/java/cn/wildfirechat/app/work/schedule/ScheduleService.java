@@ -10,7 +10,9 @@ import cn.wildfirechat.app.jpa.UserEntityRepository;
 import cn.wildfirechat.app.work.schedule.pojo.*;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.pojos.Conversation;
+import cn.wildfirechat.pojos.SendMessageResult;
 import cn.wildfirechat.proto.ProtoConstants;
+import cn.wildfirechat.sdk.model.IMResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -180,8 +182,8 @@ public class ScheduleService {
                 Conversation conversation = new Conversation();
                 conversation.setTarget(userId);
                 conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
-                ErrorCode errorCode = adminService.sendScheduleReceiveMessage(loginUserId, conversation, entry,false);
-                return errorCode == ErrorCode.ERROR_CODE_SUCCESS ? RestResult.ok(convertTo(entry)) : RestResult.error(errorCode.getMsg());
+                IMResult<SendMessageResult> result = adminService.sendScheduleReceiveMessage(loginUserId, conversation, entry, false);
+                return result.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS ? RestResult.ok(convertTo(entry)) : RestResult.result(result);
             }
         } else {
             return RestResult.error("暂不支持修改");
@@ -258,8 +260,8 @@ public class ScheduleService {
             Conversation conversation = new Conversation();
             conversation.setTarget(scheduleInfo.getUserId());
             conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
-            ErrorCode errorCode = adminService.sendScheduleReceiveMessage(loginUserId, conversation, entity,true);
-            return errorCode == ErrorCode.ERROR_CODE_SUCCESS ? RestResult.ok(convertTo(entity)) : RestResult.error(errorCode.getMsg());
+            IMResult<SendMessageResult> result = adminService.sendScheduleReceiveMessage(loginUserId, conversation, entity, true);
+            return result.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS ? RestResult.ok(convertTo(entity)) : RestResult.result(result);
         }
         return RestResult.ok(convertTo(entity));
     }
@@ -408,13 +410,10 @@ public class ScheduleService {
 
         ErrorCode errorCode = ErrorCode.ERROR_CODE_SUCCESS;
         for (Conversation conversation : request.getConversationList()) {
-            ErrorCode errorCode1 = adminService.sendScheduleShareMessage(userId, conversation, scheduleShareEntity, entityList);
-            if (errorCode == ErrorCode.ERROR_CODE_SUCCESS) {
-                errorCode = errorCode1;
-            }
+            adminService.sendScheduleShareMessage(userId, conversation, scheduleShareEntity, entityList);
         }
 
-        return errorCode == ErrorCode.ERROR_CODE_SUCCESS ? RestResult.ok(null) : RestResult.error(errorCode.getMsg());
+        return  RestResult.ok(null);
     }
 
     /**

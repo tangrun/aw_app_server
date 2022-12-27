@@ -10,6 +10,7 @@ import cn.wildfirechat.app.work.report.enums.WorkReportType;
 import cn.wildfirechat.app.work.report.pojo.VOWorkReport;
 import cn.wildfirechat.app.work.schedule.ScheduleEntity;
 import cn.wildfirechat.app.work.schedule.ScheduleShareEntity;
+import cn.wildfirechat.app.work.urgent.UrgentMsgEntity;
 import cn.wildfirechat.common.ErrorCode;
 import cn.wildfirechat.pojos.*;
 import cn.wildfirechat.proto.ProtoConstants;
@@ -40,14 +41,34 @@ public class AdminService {
     AdminService adminService;
 
     /**
+     * 着急令消息 全局窗口显示的
+     *
+     * @return
+     */
+    public IMResult<SendMessageResult> sendUrgentMessage(UrgentMsgEntity entity) {
+        Conversation conversation = new Conversation();
+        conversation.setTarget(entity.getTargetUserId());
+        conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
+
+        MessagePayload payload = new MessagePayload();
+        payload.setType(MessageContentType.Type_Urgent_Msg);
+        payload.setPersistFlag(ProtoConstants.PersistFlag.Persist);
+        payload.setContent(entity.getContent());
+
+        return sendMessage(entity.getSendUserId(), conversation, payload);
+    }
+
+
+    /**
      * 发送日程分享消息
+     *
      * @param fromUser
      * @param conversation
      * @param shareEntity
      * @param entityList
      * @return
      */
-    public ErrorCode sendScheduleShareMessage(String fromUser, Conversation conversation, ScheduleShareEntity shareEntity, List<ScheduleEntity> entityList) {
+    public IMResult<SendMessageResult> sendScheduleShareMessage(String fromUser, Conversation conversation, ScheduleShareEntity shareEntity, List<ScheduleEntity> entityList) {
         // todo
         InputOutputUserInfo user = adminService.getUserById(fromUser);
 
@@ -131,17 +152,21 @@ public class AdminService {
 
     /**
      * 发送日程接收信息
+     *
      * @param fromUser
      * @param conversation
      * @param scheduleEntity
-     * @param isAdd true：添加、false：修改
+     * @param isAdd          true：添加、false：修改
      * @return
      */
-    public ErrorCode sendScheduleReceiveMessage(String fromUser, Conversation conversation, ScheduleEntity scheduleEntity,boolean isAdd) {
+    public IMResult<SendMessageResult>  sendScheduleReceiveMessage(String fromUser, Conversation conversation, ScheduleEntity scheduleEntity, boolean isAdd) {
         // todo
         InputOutputUserInfo user = adminService.getUserById(fromUser);
-        if(user == null){
-            return ErrorCode.ERROR_CODE_USER_FORBIDDEN;
+        if (user == null) {
+            IMResult<SendMessageResult> result = new IMResult<>();
+            result.setCode(ErrorCode.ERROR_CODE_USER_FORBIDDEN.getCode());
+            result.setMsg(ErrorCode.ERROR_CODE_USER_FORBIDDEN.getMsg());
+            return result;
         }
 
         MessagePayload payload = new MessagePayload();
@@ -151,16 +176,16 @@ public class AdminService {
         {
             Map<String, Object> map = new HashMap<>();
             if (scheduleEntity.getType() == 0) {
-                if(user == null){
+                if (user == null) {
                     map.put("title", "收到新日程，请查看！");
-                }else {
-                    if(isAdd) {
+                } else {
+                    if (isAdd) {
                         map.put("title", String.format("%s为您创建了日程！", user.getDisplayName()));
-                    }else {
+                    } else {
                         map.put("title", String.format("%s为您修改了日程！", user.getDisplayName()));
                     }
                 }
-            }else {
+            } else {
                 map.put("title", String.format("%s的待办分享", user.getDisplayName()));
             }
 
@@ -208,12 +233,13 @@ public class AdminService {
 
     /**
      * 发送接龙消息
+     *
      * @param fromUser
      * @param groupId
      * @param solitaireInfo
      * @return
      */
-    public ErrorCode sendSolitaireMessage(String fromUser, String groupId, SolitaireInfo solitaireInfo) {
+    public IMResult<SendMessageResult> sendSolitaireMessage(String fromUser, String groupId, SolitaireInfo solitaireInfo) {
         Conversation conversation = new Conversation();
         conversation.setTarget(groupId);
         conversation.setType(ProtoConstants.ConversationType.ConversationType_Group);
@@ -243,13 +269,7 @@ public class AdminService {
         map.put("id", solitaireInfo.getId());
         payload.setExtra(new Gson().toJson(map));
 
-        try {
-            IMResult<SendMessageResult> resultSendMessage = MessageAdmin.sendMessage(fromUser, conversation, payload);
-            if (resultSendMessage != null) return resultSendMessage.getErrorCode();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return ErrorCode.ERROR_CODE_SERVER_ERROR;
+        return sendMessage(fromUser, conversation, payload);
     }
 
     /**
@@ -259,7 +279,7 @@ public class AdminService {
      * @param toUser
      * @param text
      */
-    public ErrorCode sendTextMessage(String fromUser, String toUser, String text) {
+    public IMResult<SendMessageResult> sendTextMessage(String fromUser, String toUser, String text) {
         Conversation conversation = new Conversation();
         conversation.setTarget(toUser);
         conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
@@ -268,34 +288,30 @@ public class AdminService {
         payload.setPersistFlag(ProtoConstants.PersistFlag.Persist_And_Count);
         payload.setSearchableContent(text);
 
-
-        try {
-            IMResult<SendMessageResult> resultSendMessage = MessageAdmin.sendMessage(fromUser, conversation, payload);
-            if (resultSendMessage != null) return resultSendMessage.getErrorCode();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return ErrorCode.ERROR_CODE_SERVER_ERROR;
+        return sendMessage(fromUser, conversation, payload);
     }
 
-    private ErrorCode sendMessage(String fromUser, Conversation conversation, MessagePayload payload) {
+    private IMResult<SendMessageResult> sendMessage(String fromUser, Conversation conversation, MessagePayload payload) {
+        log.debug("sendMessage fail, from {},conversation {}, payload {}", fromUser, conversation, payload);
         try {
-            IMResult<SendMessageResult> resultSendMessage = MessageAdmin.sendMessage(fromUser, conversation, payload);
-            if (resultSendMessage != null) return resultSendMessage.getErrorCode();
+            return MessageAdmin.sendMessage(fromUser, conversation, payload);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("sendMessage fail", e);
         }
-        return ErrorCode.ERROR_CODE_SERVER_ERROR;
+        IMResult<SendMessageResult> result = new IMResult<>();
+        result.setCode(ErrorCode.ERROR_CODE_SERVER_ERROR.getCode());
+        result.setMsg(ErrorCode.ERROR_CODE_SERVER_ERROR.getMsg());
+        return result;
     }
 
     @CacheEvict(key = "'user:id:'+#userId")
-    public RestResult<Void> destroyUser(String userId){
+    public RestResult<Void> destroyUser(String userId) {
         IMResult<Void> voidIMResult = null;
         try {
             voidIMResult = UserAdmin.destroyUser(userId);
             if (voidIMResult.getErrorCode() != ErrorCode.ERROR_CODE_SUCCESS) {
                 return RestResult.error(voidIMResult.getMsg());
-            }else return RestResult.ok();
+            } else return RestResult.ok();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -347,7 +363,7 @@ public class AdminService {
     public RestResult sendWorkReportMessage(String fromUser, String targetId, boolean group, VOWorkReport entry) {
         Conversation conversation = new Conversation();
         conversation.setTarget(targetId);
-        conversation.setType(group?ProtoConstants.ConversationType.ConversationType_Group: ProtoConstants.ConversationType.ConversationType_Private);
+        conversation.setType(group ? ProtoConstants.ConversationType.ConversationType_Group : ProtoConstants.ConversationType.ConversationType_Private);
         MessagePayload payload = new MessagePayload();
         payload.setType(MessageContentType.Type_Work_Report_Send_To);
         payload.setPersistFlag(ProtoConstants.PersistFlag.Persist_And_Count);
@@ -407,11 +423,11 @@ public class AdminService {
      * @param invoker
      * @return
      */
-    public RestResult setFriendExtra(String userId, String targetId, Invoker<FriendExtraInfo> invoker) {
+    public RestResult<Void> setFriendExtra(String userId, String targetId, Invoker<FriendExtraInfo> invoker) {
         log.debug("setUserExtra() called with: userId = [{}], targetId = [{}]", userId, targetId);
         try {
             IMResult<RelationPojo> relation = RelationAdmin.getRelation(userId, targetId);
-            if (relation.getCode() == ErrorCode.ERROR_CODE_SUCCESS.code) {
+            if (relation.getErrorCode() == ErrorCode.ERROR_CODE_SUCCESS) {
                 RelationPojo result = relation.getResult();
                 Gson gson = new Gson();
                 FriendExtraInfo userExtraInfo = StringUtils.isBlank(result.extra) ? FriendExtraInfo.defaultExtra() : gson.fromJson(result.extra, FriendExtraInfo.class);
@@ -419,9 +435,10 @@ public class AdminService {
                 IMResult<Void> result1 = RelationAdmin.updateFriendExtra(userId, targetId, gson.toJson(userExtraInfo));
                 return RestResult.result(result1);
             }
+            log.error("setFriendExtra code fail. {}", relation.getErrorCode());
             return RestResult.result(relation);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("setFriendExtra",e);
         }
         return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
     }
@@ -458,7 +475,7 @@ public class AdminService {
      * @param targetUser
      * @return
      */
-    public RestResult sendRefreshFriendListNotifyMessage(String fromUser, String targetUser) {
+    public RestResult<Void> sendRefreshFriendListNotifyMessage(String fromUser, String targetUser) {
         Conversation conversation = new Conversation();
         conversation.setTarget(targetUser);
         conversation.setType(ProtoConstants.ConversationType.ConversationType_Private);
@@ -469,7 +486,7 @@ public class AdminService {
             IMResult<SendMessageResult> result = MessageAdmin.sendMessage(fromUser, conversation, payload);
             return RestResult.result(result);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("sendRefreshFriendListNotifyMessage",e);
             return RestResult.error(RestResult.RestCode.ERROR_SERVER_ERROR);
         }
     }
